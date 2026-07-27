@@ -27,13 +27,35 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends cmake python3 unzip
 
-      - name: Install 3DS libraries
+      # devkitPro's package server answers 403 to the address ranges CI runs
+      # in; they would rather people used this image, which already carries the
+      # libraries, than have builders pull the same packages over and over.
+      # So take stock of what is here and only reach for pacman if something is
+      # actually absent.
+      - name: Check 3DS libraries
         run: |
-          dkp-pacman -Sy --noconfirm --needed \
-            3ds-sdl 3ds-sdl_mixer 3ds-sdl_image \
-            3ds-libpng 3ds-libjpeg-turbo 3ds-zlib 3ds-bzip2 \
-            3ds-freetype 3ds-curl 3ds-mbedtls \
-            3ds-libmad 3ds-libvorbisidec 3ds-libogg 3ds-libmikmod
+          portlibs=/opt/devkitpro/portlibs/3ds/lib
+          echo "present:"
+          ls "$portlibs" 2>/dev/null | tr '\n' ' ' || echo "  (no portlibs directory)"
+          echo
+          missing=
+          for lib in libSDL.a libSDL_mixer.a libSDL_image.a libpng.a \
+                     libjpeg.a libz.a libbz2.a libfreetype.a libcurl.a \
+                     libmbedtls.a libmad.a libvorbisidec.a libogg.a \
+                     libmikmod.a; do
+            [ -f "$portlibs/$lib" ] || missing="$missing $lib"
+          done
+          if [ -n "$missing" ]; then
+            echo "missing:$missing"
+            echo "attempting to install them"
+            dkp-pacman -Sy --noconfirm --needed \
+              3ds-sdl 3ds-sdl_mixer 3ds-sdl_image \
+              3ds-libpng 3ds-libjpeg-turbo 3ds-zlib 3ds-bzip2 \
+              3ds-freetype 3ds-curl 3ds-mbedtls \
+              3ds-libmad 3ds-libvorbisidec 3ds-libogg 3ds-libmikmod
+          else
+            echo "every library this build links is already in the image"
+          fi
 
       # protobuf and libxml2 take far longer to build than the game does, and
       # they only change when the vendored sources do.
