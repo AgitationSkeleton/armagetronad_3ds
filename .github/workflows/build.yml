@@ -97,11 +97,13 @@ jobs:
           curl -fsSL -o "$RUNNER_TEMP/makerom.zip" \
             https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
           unzip -j -o "$RUNNER_TEMP/makerom.zip" makerom -d "$RUNNER_TEMP/tools"
-          curl -fsSL -o "$RUNNER_TEMP/bannertool.tar.gz" \
-            https://github.com/carstene1ns/3ds-bannertool/releases/download/1.2.3/bannertool-1.2.3-linux.tar.gz
-          tar -xzf "$RUNNER_TEMP/bannertool.tar.gz" -C "$RUNNER_TEMP" \
-            --strip-components=1 bannertool-1.2.3-linux/bannertool
-          mv "$RUNNER_TEMP/bannertool" "$RUNNER_TEMP/tools/bannertool"
+          # This build of bannertool rather than a newer one: the current
+          # releases are linked against glibc 2.38 and the devkitARM image is
+          # Debian Bullseye, which has 2.31. This one asks for 2.14.
+          curl -fsSL -o "$RUNNER_TEMP/bannertool.zip" \
+            https://github.com/diasurgical/bannertool/releases/download/1.2.0/bannertool.zip
+          unzip -j -o "$RUNNER_TEMP/bannertool.zip" linux-x86_64/bannertool \
+            -d "$RUNNER_TEMP/tools"
           chmod +x "$RUNNER_TEMP/tools/makerom" "$RUNNER_TEMP/tools/bannertool"
 
       - name: Package CIA

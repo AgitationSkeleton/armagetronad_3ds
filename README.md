@@ -120,7 +120,7 @@ On Windows the same steps are `build-dependencies` by hand, then
 
 Packaging a CIA also needs
 [makerom](https://github.com/3DSGuy/Project_CTR) and
-[bannertool](https://github.com/carstene1ns/3ds-bannertool); point `MAKEROM` and
+[bannertool](https://github.com/diasurgical/bannertool); point `MAKEROM` and
 `BANNERTOOL` at them if they are not on the path.
 
 ### Releasing
