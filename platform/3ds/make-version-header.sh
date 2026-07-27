@@ -15,8 +15,18 @@ here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 root=$(CDPATH= cd -- "$here/../.." && pwd)
 header="$root/src/tTrueVersion.h"
 
+# Keys with no value are dropped rather than defined empty. tVersion.cpp has an
+# #ifndef fallback for every one of them, so a missing define is handled; a
+# define with nothing after it expands to the key's own name at the use site,
+# which is how "error: 'ZNR' was not declared in this scope" happens.
 sh "$root/batch/make/version" --verbose "$root" \
-    | awk '{ print "#define TRUE_ARMAGETRONAD_" $1 " " substr($0, index($0, $2)) }' \
+    | awk '{
+        key = $1
+        $1 = ""
+        sub(/^[ \t]+/, "")
+        if (length($0) > 0)
+            print "#define TRUE_ARMAGETRONAD_" key " " $0
+      }' \
     > "$header"
 
 if ! grep -q TRUE_ARMAGETRONAD_VERSION "$header"; then

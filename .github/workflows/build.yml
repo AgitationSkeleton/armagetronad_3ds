@@ -30,6 +30,11 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends cmake python3 unzip
+          # The checkout action marks the workspace safe in a HOME it only
+          # keeps for itself, so git inside these steps still refuses to look
+          # at a tree owned by another user. Version detection reads the
+          # history, and a refusal there is silent: it just comes back empty.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       # devkitPro's package server answers 403 to the address ranges CI runs
       # in; they would rather people used this image, which already carries the
