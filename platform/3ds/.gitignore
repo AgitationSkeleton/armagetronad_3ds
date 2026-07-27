@@ -8,21 +8,24 @@
 # then ignore only what this build actually produces.
 !*
 
-# Built by platform/3ds/Makefile.
-build/
-build-full/
-*.3dsx
-*.cia
-*.elf
-*.smdh
-*.map
-*.log
+# Built by platform/3ds/Makefile. Anchored to this directory rather than left
+# loose, because the vendored sources below have every right to a file called
+# something.map: protobuf's linker version scripts are named exactly that, and
+# a bare rule takes them out along with the linker map this build writes.
+/build/
+/build-full/
+/*.3dsx
+/*.cia
+/*.elf
+/*.smdh
+/*.map
+/*.log
 
 # Assembled from the repository's own data by prepare-romfs.
-romfs/
+/romfs/
 
 # Written by protoc from src/protobuf.
-generated/
+/generated/
 
 # Cross build trees for the vendored dependencies, made by
 # build-dependencies.sh. The hand written ftgl makefile is not one of them.
