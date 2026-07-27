@@ -26,6 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
 #include "rFont.h"
+#include <cmath>
 #include "rScreen.h"
 #include "tConfiguration.h"
 #include "tDirectories.h"
@@ -197,7 +198,21 @@ public:
         //std::cerr << "len: " << str.size() << std::endl;
         if(sr_fontType >= sr_fontTexture) {
             glPushMatrix();
+#ifdef __3DS__
+            // Glyphs are rasterised at the exact pixel size they are drawn at,
+            // so the texture is sharp only while texels line up with pixels.
+            // On a 240 line screen a half pixel offset is plainly visible as
+            // smearing, so the text origin is snapped to the pixel grid.
+            {
+                float const halfWidth = sr_screenWidth * .5f;
+                float const halfHeight = sr_screenHeight * .5f;
+                float const snappedX = floorf((where.x + 1.f) * halfWidth + .5f) / halfWidth - 1.f;
+                float const snappedY = floorf((where.y + 1.f) * halfHeight + .5f) / halfHeight - 1.f;
+                glTranslatef(snappedX, snappedY, 0.);
+            }
+#else
             glTranslatef(where.x, where.y, 0.);
+#endif
             glScalef(2./sr_screenWidth, 2./sr_screenHeight, 1.);
             if(sr_fontType == sr_fontTexture) {
                 glEnable(GL_TEXTURE_2D);
@@ -275,6 +290,10 @@ static tConfItem<int> ufc("USE_CUSTOM_FONT", useCustomFont, &sr_ReloadFont);
 static rCallbackBeforeScreenModeChange reloadft(&sr_ReloadFont);
 
 FTFont *rFontContainer::Load(tString const &path) {
+#ifdef __3DS__
+    sr_fontType = sr_fontTexture;
+    return new FTGLTextureFont(path);
+#else
     FTFont *font;
     switch (sr_fontType) {
     case sr_fontPixmap:
@@ -297,6 +316,7 @@ FTFont *rFontContainer::Load(tString const &path) {
         font = new FTGLTextureFont(path);
     }
     return font;
+#endif
 }
 FTFont &rFontContainer::New(int size) {
     FTFont *font;

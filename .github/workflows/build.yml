@@ -1,0 +1,92 @@
+name: Build
+
+# Builds the Nintendo 3DS port. Runs on its own for pushes and pull requests,
+# and is called by the release workflow so a tag ships exactly what CI built.
+
+on:
+  push:
+    branches: [ trunk ]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  build:
+    name: 3dsx and cia
+    runs-on: ubuntu-latest
+    # Carries devkitARM, libctru and citro3d. Everything else is either a
+    # devkitPro portlib or vendored under platform/3ds/vendor.
+    container: devkitpro/devkitarm:latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Install host tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake python3 unzip
+
+      - name: Install 3DS libraries
+        run: |
+          dkp-pacman -Sy --noconfirm --needed \
+            3ds-sdl 3ds-sdl_mixer 3ds-sdl_image \
+            3ds-libpng 3ds-libjpeg-turbo 3ds-zlib 3ds-bzip2 \
+            3ds-freetype 3ds-curl 3ds-mbedtls \
+            3ds-libmad 3ds-libvorbisidec 3ds-libogg 3ds-libmikmod
+
+      # protobuf and libxml2 take far longer to build than the game does, and
+      # they only change when the vendored sources do.
+      - name: Restore dependency builds
+        uses: actions/cache@v4
+        with:
+          path: |
+            platform/3ds/vendor/libxml2-build-3ds
+            platform/3ds/vendor/protobuf-build-3ds
+            platform/3ds/vendor/protobuf-build-host
+            platform/3ds/vendor/ftgl-build-3ds
+          key: deps-${{ runner.os }}-${{ hashFiles('platform/3ds/build-dependencies.sh', 'platform/3ds/vendor/ftgl-build-3ds/Makefile') }}
+
+      - name: Build dependencies
+        run: sh platform/3ds/build-dependencies.sh
+
+      - name: Assemble RomFS
+        run: sh platform/3ds/prepare-romfs.sh
+
+      - name: Build
+        working-directory: platform/3ds
+        run: make -j"$(nproc)"
+
+      - name: Fetch packaging tools
+        run: |
+          mkdir -p "$RUNNER_TEMP/tools"
+          curl -fsSL -o "$RUNNER_TEMP/makerom.zip" \
+            https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.4/makerom-v0.18.4-ubuntu_x86_64.zip
+          unzip -j -o "$RUNNER_TEMP/makerom.zip" makerom -d "$RUNNER_TEMP/tools"
+          curl -fsSL -o "$RUNNER_TEMP/bannertool.tar.gz" \
+            https://github.com/carstene1ns/3ds-bannertool/releases/download/1.2.3/bannertool-1.2.3-linux.tar.gz
+          tar -xzf "$RUNNER_TEMP/bannertool.tar.gz" -C "$RUNNER_TEMP" \
+            --strip-components=1 bannertool-1.2.3-linux/bannertool
+          mv "$RUNNER_TEMP/bannertool" "$RUNNER_TEMP/tools/bannertool"
+          chmod +x "$RUNNER_TEMP/tools/makerom" "$RUNNER_TEMP/tools/bannertool"
+
+      - name: Package CIA
+        env:
+          MAKEROM: ${{ runner.temp }}/tools/makerom
+          BANNERTOOL: ${{ runner.temp }}/tools/bannertool
+        run: sh platform/3ds/package-cia.sh
+
+      - name: Report
+        run: |
+          cd platform/3ds
+          ls -l armagetronad-3ds.3dsx armagetronad-3ds.cia armagetronad-3ds.smdh
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: armagetronad-3ds
+          if-no-files-found: error
+          path: |
+            platform/3ds/armagetronad-3ds.3dsx
+            platform/3ds/armagetronad-3ds.cia
+            platform/3ds/armagetronad-3ds.smdh

@@ -43,6 +43,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "rSysdep.h"
 #include "uInput.h"
 
+#ifdef __3DS__
+#include "cockpit/cCockpit.h"
+#endif
+
 #include <sstream>
 #include <set>
 #include <ctime>
@@ -66,7 +70,9 @@ uMenu screen_menu_detail("$detail_settings_menu");
 uMenu screen_menu_tweaks("$performance_tweaks_menu");
 uMenu screen_menu_prefs("$preferences_menu");
 
+#ifndef __3DS__
 static void sg_ScreenModeMenu();
+#endif
 
 static uMenuItemSubmenu smt(&sg_screenMenu,&screen_menu_tweaks,
                             "$performance_tweaks_menu_help");
@@ -74,8 +80,17 @@ static uMenuItemSubmenu smd(&sg_screenMenu,&screen_menu_detail,
                             "$detail_settings_menu_help");
 static uMenuItemSubmenu smp(&sg_screenMenu,&screen_menu_prefs,
                             "$preferences_menu_help");
+#ifdef __3DS__
+// The 3DS screen is a fixed 400x240 panel, so resolution, window size,
+// fullscreen and "apply changes" have nothing to select. The entry goes
+// straight to the settings that do apply on this console.
+static void sg_ScreenModeAdvanced();
+static uMenuItemFunction smm(&sg_screenMenu,"$screen_mode_advanced",
+                             "$screen_mode_advanced_help", sg_ScreenModeAdvanced );
+#else
 static uMenuItemFunction smm(&sg_screenMenu,"$screen_mode_menu",
                              "$screen_mode_menu_help", sg_ScreenModeMenu );
+#endif
 
 static tConfItemLine c_ext("GL_EXTENSIONS",gl_extensions);
 static tConfItemLine c_ver("GL_VERSION",gl_version);
@@ -114,6 +129,53 @@ public:
     ~ArmageTron_feature_menuitem(){}
 };
 
+
+#ifdef __3DS__
+// How much the 3D slider is allowed to do. Off is worth keeping as a choice
+// rather than leaving it to the slider, because a flat frame is drawn once and
+// a stereo one twice.
+class ArmageTron_3ds_stereo_menuitem: public uMenuItemSelection<int>{
+    void NewChoice(uSelectItem<bool> *){}
+    void NewChoice(char *,bool ){}
+public:
+    ArmageTron_3ds_stereo_menuitem(uMenu *m,int &targ)
+            :uMenuItemSelection<int>
+    (m,"$stereo_depth_text","$stereo_depth_help",targ){
+        uMenuItemSelection<int>::NewChoice
+        ("$stereo_depth_off_text","$stereo_depth_off_help",0);
+        uMenuItemSelection<int>::NewChoice
+        ("$stereo_depth_subtle_text","$stereo_depth_subtle_help",4);
+        uMenuItemSelection<int>::NewChoice
+        ("$stereo_depth_normal_text","$stereo_depth_normal_help",7);
+        uMenuItemSelection<int>::NewChoice
+        ("$stereo_depth_strong_text","$stereo_depth_strong_help",10);
+    }
+
+    ~ArmageTron_3ds_stereo_menuitem(){}
+};
+
+// The choices are the only sizes the hardware accepts in the useful range, so
+// they are offered as a list rather than a slider that would silently round.
+class ArmageTron_3ds_texsize_menuitem: public uMenuItemSelection<int>{
+    void NewChoice(uSelectItem<bool> *){}
+    void NewChoice(char *,bool ){}
+public:
+    ArmageTron_3ds_texsize_menuitem(uMenu *m,int &targ)
+            :uMenuItemSelection<int>
+    (m,"$texture_size_text","$texture_size_help",targ){
+        uMenuItemSelection<int>::NewChoice
+        ("$texture_size_128_text","$texture_size_128_help",128);
+        uMenuItemSelection<int>::NewChoice
+        ("$texture_size_256_text","$texture_size_256_help",256);
+        uMenuItemSelection<int>::NewChoice
+        ("$texture_size_512_text","$texture_size_512_help",512);
+        uMenuItemSelection<int>::NewChoice
+        ("$texture_size_1024_text","$texture_size_1024_help",1024);
+    }
+
+    ~ArmageTron_3ds_texsize_menuitem(){}
+};
+#endif
 
 class ArmageTron_texmode_menuitem: public uMenuItemSelection<int>{
     void NewChoice(uSelectItem<bool> *){}
@@ -461,10 +523,109 @@ public:
     }
 };
 
+#ifdef __3DS__
+namespace
+{
+struct sg_HudGroup
+{
+    int group;
+    bool visible;
+    char const * configName;
+};
+
+// Group ids match the toggle attributes in AATeam/3ds-0.0.1.aacockpit.xml.
+sg_HudGroup sg_hudGroups[] = {
+    { 2, true, "HUD_SHOW_SCORE" },
+    { 3, true, "HUD_SHOW_SPEED" },
+    { 4, true, "HUD_SHOW_STATUS" },
+};
+
+void sg_ApplyHudGroups()
+{
+    for ( sg_HudGroup const & entry : sg_hudGroups )
+        cCockpit::SetGroupActive( entry.group, entry.visible );
+}
+
+class sg_HudGroupItem : public uMenuItemToggle
+{
+public:
+    sg_HudGroupItem( uMenu * menu, char const * title, char const * help, bool & target )
+        : uMenuItemToggle( menu, title, help, target )
+    {
+    }
+
+    void Enter() override
+    {
+        uMenuItemToggle::Enter();
+        sg_ApplyHudGroups();
+    }
+};
+}
+
+// Config items so the choices survive a restart. Reading them back is enough;
+// the cockpit is told about them when the HUD menu is opened and whenever a
+// round starts.
+static tConfItem<bool> sg_hudScoreConf( "HUD_SHOW_SCORE", sg_hudGroups[0].visible );
+static tConfItem<bool> sg_hudSpeedConf( "HUD_SHOW_SPEED", sg_hudGroups[1].visible );
+static tConfItem<bool> sg_hudStatusConf( "HUD_SHOW_STATUS", sg_hudGroups[2].visible );
+
+void sg_3dsApplyHudSettings()
+{
+    sg_ApplyHudGroups();
+}
+
+static void sg_HudMenu()
+{
+    uMenu hud_menu("$hud_menu_text");
+
+    sg_HudGroupItem status
+    (&hud_menu, "$hud_status_text", "$hud_status_help", sg_hudGroups[2].visible);
+
+    sg_HudGroupItem speed
+    (&hud_menu, "$hud_speed_text", "$hud_speed_help", sg_hudGroups[1].visible);
+
+    sg_HudGroupItem score
+    (&hud_menu, "$hud_score_text", "$hud_score_help", sg_hudGroups[0].visible);
+
+    sg_ApplyHudGroups();
+    hud_menu.Enter();
+    sg_ApplyHudGroups();
+}
+
+static uMenuItemFunction sg_hudMenuItem
+(&sg_screenMenu, "$hud_menu_text", "$hud_menu_help", sg_HudMenu );
+#endif
+
 static void sg_ScreenModeAdvanced()
 {
     uMenu screen_menu_mode("$screen_mode_advanced");
     
+#ifdef __3DS__
+    {
+        extern int sr_3dsLineWidth;
+        static uMenuItemInt * lineWidth = NULL;
+        lineWidth = tNEW(uMenuItemInt)(
+            &screen_menu_mode,
+            "$line_width_text", "$line_width_help",
+            sr_3dsLineWidth, 1, 6, 1);
+        (void)lineWidth;
+
+        extern int sr_3dsTextureSize;
+        static ArmageTron_3ds_texsize_menuitem * textureSize = NULL;
+        textureSize = tNEW(ArmageTron_3ds_texsize_menuitem)(
+            &screen_menu_mode, sr_3dsTextureSize );
+        (void)textureSize;
+
+        extern int sr_3dsStereoDepth;
+        static ArmageTron_3ds_stereo_menuitem * stereoDepth = NULL;
+        stereoDepth = tNEW(ArmageTron_3ds_stereo_menuitem)(
+            &screen_menu_mode, sr_3dsStereoDepth );
+        (void)stereoDepth;
+    }
+#endif
+
+#ifndef __3DS__
+    // There is no mouse pointer to grab and no desktop window to deactivate.
     uMenuItemToggle gm(
         &screen_menu_mode,
         "$screen_grab_mouse_text",
@@ -476,8 +637,10 @@ static void sg_ScreenModeAdvanced()
         "$screen_keep_window_active_text",
         "$screen_keep_window_active_help",
         sr_keepWindowActive);
+#endif
 
-#if !SDL_VERSION_ATLEAST(2,0,0)
+#if !SDL_VERSION_ATLEAST(2,0,0) && !defined(__3DS__)
+    // There are no video modes to warn about on a fixed console panel.
     uMenuItemToggle ie_t
     (&screen_menu_mode,
      "$screen_check_errors_text",
@@ -523,7 +686,8 @@ static void sg_ScreenModeAdvanced()
         }
     }
 
-#ifdef SDL_OPENGL
+#if defined(SDL_OPENGL) && !defined(__3DS__)
+// Presentation is driven by C3D_FrameEnd, which always syncs to the panel.
 #if SDL_VERSION_ATLEAST(1, 2, 10)
     uMenuItemSelection<rVSync> zvs_t
     (&screen_menu_mode,
@@ -540,6 +704,8 @@ static void sg_ScreenModeAdvanced()
 #endif // SDL_GL_SWAP_CONTROL
 #endif // SDL_OPENGL
 
+#ifndef __3DS__
+    // The Citro3D render targets fix both buffer formats.
     uMenuItemSelection<rColorDepth> zd_t
     (&screen_menu_mode,
      "$screen_zdepth_text",
@@ -559,10 +725,12 @@ static void sg_ScreenModeAdvanced()
     uSelectEntry<rColorDepth> cd_16(cd_t,"$screen_colordepth_16_text","$screen_colordepth_16_help",ArmageTron_ColorDepth_16);
     uSelectEntry<rColorDepth> cd_d(cd_t,"$screen_colordepth_desk_text","$screen_colordepth_desk_help",ArmageTron_ColorDepth_Desktop);
     uSelectEntry<rColorDepth> cd_32(cd_t,"$screen_colordepth_32_text","$screen_colordepth_32_help",ArmageTron_ColorDepth_32);
+#endif
 
     screen_menu_mode.Enter();
 }
 
+#ifndef __3DS__
 static void sg_ScreenModeMenu()
 {
     uMenu screen_menu_mode("$screen_mode_menu");
@@ -630,6 +798,7 @@ static void sg_ScreenModeMenu()
     sg_refreshRateMenuItem = NULL;
 #endif
 }
+#endif // __3DS__
 
 
 #define gZONE_STYLE_VERT 0
@@ -764,9 +933,13 @@ static uSelectEntry<int> mfdb(mfd,"$detail_floor_grid_text",
 static uSelectEntry<int> mfdc(mfd,"$detail_floor_tex_text",
                               "$detail_floor_tex_help",
                               rFLOOR_TEXTURE);
+#ifndef __3DS__
+// Additive double texturing saturates to white through the Citro3D
+// compatibility layer, so the choice is not offered on this console.
 static uSelectEntry<int> mfdd(mfd,"$detail_floor_2tex_text",
                               "$detail_floor_2tex_help",
                               rFLOOR_TWOTEXTURE);
+#endif
 
 static uMenuItemToggle  abm
 (&screen_menu_detail,"$detail_alpha_text",
@@ -1452,7 +1625,9 @@ static uActionGlobal con_input( "CONSOLE_INPUT" );
 
 static uActionGlobal screenshot( "SCREENSHOT" );
 
+#ifndef __3DS__
 static uActionGlobal togglefullscreen( "TOGGLE_FULLSCREEN" );
+#endif
 
 #ifndef DEDICATED
 static const char* sg_defaultScreenshotName = "%Y-%m-%d_%H-%M-%S";
@@ -1484,6 +1659,7 @@ static bool con_func(REAL x){
     return true;
 }
 
+#ifndef __3DS__
 static bool toggle_fullscreen_func( REAL x )
 {
 #ifndef DEDICATED
@@ -1509,6 +1685,10 @@ static bool toggle_fullscreen_func( REAL x )
     return true;
 }
 
+#endif // __3DS__
+
 static uActionGlobalFunc gaf_ss(&screenshot,&screenshot_func, true );
 static uActionGlobalFunc gaf_md(&con_input,&con_func);
+#ifndef __3DS__
 static uActionGlobalFunc gaf_tf(&togglefullscreen,&toggle_fullscreen_func, true );
+#endif

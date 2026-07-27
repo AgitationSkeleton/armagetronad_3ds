@@ -1,6 +1,30 @@
 #include <SDL.h>
 
-#if SDL_VERSION_ATLEAST(2,0,0)
+#if defined(__3DS__)
+
+#include "scrap.h"
+
+int init_scrap(void)
+{
+    return 0;
+}
+
+int lost_scrap(void)
+{
+    return 1;
+}
+
+void put_scrap(int, int, char *)
+{
+}
+
+void get_scrap(int, int *dstlen, char **dst)
+{
+    *dstlen = 0;
+    *dst = 0;
+}
+
+#elif SDL_VERSION_ATLEAST(2,0,0)
 
 /*
         This file is part of Warzone 2100.

@@ -36,6 +36,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <sstream>
 #include <stdio.h>  // need basic C IO since STL IO does memory management
 #include "tMemManager.h"
+
+#ifdef __3DS__
+#include <new>
+#include "aa3ds_runtime.h"
+#endif
 #include "tError.h"
 
 #ifdef HAVE_STDLIB_H
@@ -1152,6 +1157,18 @@ void *tMemManager::AllocDefault(tAllocationInfo const & info, size_t s){
 #endif
 #else
     void *ret=malloc(s+sizeof(chunkinfo));
+#endif
+#ifdef __3DS__
+    if ( !ret )
+    {
+        // The chunk header write below starts at byte one of the block, so a
+        // failed allocation used to show up as a data abort at address one,
+        // deep inside operator new, with nothing to say it was simply out of
+        // memory. Say so, and throw the exception the caller is entitled to.
+        aa3ds_log( "out of memory: %u byte allocation failed", (unsigned)s );
+        aa3ds_log_memory( "allocation failure" );
+        throw std::bad_alloc();
+    }
 #endif
     ((chunkinfo *)ret)->size_in_dwords=0;
     ((chunkinfo *)ret)->occupied=true;

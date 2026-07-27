@@ -259,6 +259,31 @@ void Map::Render() {
             m_position.x-m_size.x, m_position.y-m_size.y, 2.*m_size.x, 2.*m_size.y,
             sr_screenWidth*m_size.x, sr_screenWidth*m_size.y, .5, .5);
 }
+#ifdef __3DS__
+void Map::Render3DSBottom(cCockpit* cockpit) {
+    m_Cockpit = cockpit;
+    // Same defaults as the first entry of the cockpit map's mode list, so the
+    // touch screen map is oriented the way the in-game HUD map is: the whole
+    // arena, held in the direction the player spawned facing.
+    m_mode = MODE_STD;
+    m_rotation = ROTATION_SPAWN;
+    m_3dsFillArena = true;
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    glDisable(GL_TEXTURE_2D);
+    glDisable(GL_LIGHTING);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+
+    DrawMap(true, true,
+            5.5, 0.,
+            -0.96, -0.92, 1.92, 1.84,
+            320., 240., .5, .5);
+}
+#endif
 void Map::DrawMap(bool rimWalls, bool cycleWalls,
                   double cycleSize, double border,
                   double x, double y, double w, double h,
@@ -390,6 +415,18 @@ void Map::DrawMap(bool rimWalls, bool cycleWalls,
         m_centre.x, m_centre.y, 0, 1};
     glMultMatrixf(r);
     glTranslatef(-m_centre.x,-m_centre.y,0);
+#ifdef __3DS__
+    if(m_3dsFillArena && se_rimWallRubberBand.size() > 2) {
+        glDisable(GL_TEXTURE_2D);
+        glColor4f(0.05f, 0.09f, 0.16f, 1.f);
+        glBegin(GL_POLYGON);
+        for(std::vector<tCoord>::iterator iter = se_rimWallRubberBand.begin();
+            iter != se_rimWallRubberBand.end(); ++iter) {
+            glVertex2f(iter->x, iter->y);
+        }
+        glEnd();
+    }
+#endif
     if(rimWalls)
         DrawRimWalls(se_rimWalls);
     if(cycleWalls) {

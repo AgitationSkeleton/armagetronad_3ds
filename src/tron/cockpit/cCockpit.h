@@ -181,6 +181,10 @@ public:
     static bool ProcessKey5(float i=0);
     std::multimap<int, cWidget::Base *> m_EventHandlers;
     bool HandleEvent(int id, bool state);
+#ifdef __3DS__
+    //! Shows or hides every widget in a toggle group, for the 3DS HUD settings.
+    static void SetGroupActive(int id, bool state);
+#endif
 
     void Readjust(void); //!< Readjusts the cockpit to a new window height
     void Readjust(float factor); //!< Readjusts the cockpit to a given factor

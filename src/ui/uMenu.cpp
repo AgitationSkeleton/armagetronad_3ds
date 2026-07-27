@@ -65,7 +65,22 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include <vector>
 
+#ifdef __3DS__
+#include <3ds.h>
+#include "aa3ds_runtime.h"
+#include "aa3ds_gl.h"
+#endif
+
 FUNCPTR  uMenu::idle(NULL);
+
+#ifdef __3DS__
+static uMenu * su_3dsActiveMenu = NULL;
+
+uMenu * uMenu::Active3DS()
+{
+    return su_3dsActiveMenu;
+}
+#endif
 
 bool uMenu::wrap=true;
 uMenu::QuickExit uMenu::quickexit=uMenu::QuickExit_Off;
@@ -150,6 +165,13 @@ static bool disphelp=false;
 static REAL lastkey;
 #endif
 
+// set while a modal message is being displayed
+static bool su_inMessage = false;
+bool uMenu::MessageActive()
+{
+    return su_inMessage;
+}
+
 // inhibit console newline display while in a menu, it causes flickering
 static bool su_inMenu = false;
 bool uMenu::MenuActive()
@@ -177,6 +199,23 @@ void uMenu::OnEnter(){
 
     uCallbackMenuEnter::MenuEnter();
     su_inMenu = true;
+
+#ifdef __3DS__
+    // Nested menus restore their parent on the way out.
+    uMenu * previous3DSMenu = su_3dsActiveMenu;
+    su_3dsActiveMenu = this;
+    struct Restore3DSMenu
+    {
+        uMenu * & slot;
+        uMenu * previous;
+        ~Restore3DSMenu() { slot = previous; }
+    } restore3DSMenu{ su_3dsActiveMenu, previous3DSMenu };
+#endif
+
+#ifdef __3DS__
+    if ( aa3ds_trace_enabled() )
+        aa3ds_log( "menu: enter \"%s\" with %d items", tString(title).c_str(), items.Len() );
+#endif
 
     if (items.Len()<=0)
         return;
@@ -350,6 +389,7 @@ void uMenu::OnEnter(){
             return;
 
         if (sr_glOut && !exitFlag && !quickexit){
+#ifndef __3DS__
             items[selected]->Render(center,YPos(selected),1,true);
 
             for (int i=items.Len()-1;i>=0;i--)
@@ -368,6 +408,7 @@ void uMenu::OnEnter(){
                         items[i]->Render(center,y,alpha,false);
                     }
                 }
+#endif
 
             rTextField::SetDefaultColor( tColor(1,1,1,1) );
             rTextField::SetBlendColor( tColor(1,1,1,1) );
@@ -377,6 +418,7 @@ void uMenu::OnEnter(){
                           ,text_height*titlefac,
                           title,sr_fontMenuTitle,0);
 
+#ifndef __3DS__
             glDisable(GL_TEXTURE_2D);
             //glDisable(GL_TEXTURE);
             Color(1,.2,.2,.5);
@@ -384,6 +426,7 @@ void uMenu::OnEnter(){
                 arrow(.9,menuBot+.1,-1,.05);
             if (YPos(menuentries-1)>menuTop && (int(tSysTimeFloat())+1)%2)
                 arrow(.9,menuTop,1,.05);
+#endif
 
             REAL helpAlpha = tSysTimeFloat()-lastkey-timeout;
             if( helpAlpha > 1 )
@@ -547,7 +590,116 @@ void uMenu::SetSelected( int s )
     if( selected >= 0 && selected < items.Len() ) items[selected]->Deselect();
     selected = s;
     if( selected >= 0 && selected < items.Len() ) items[selected]->Select();
+
+#ifdef __3DS__
+    if ( aa3ds_trace_enabled() && selected >= 0 && selected < items.Len() )
+        aa3ds_log(
+            "menu: \"%s\" item %d/%d help \"%s\"",
+            tString(title).c_str(), selected, items.Len(),
+            items[selected]->Help().c_str() );
+#endif
 }
+
+#ifdef __3DS__
+void uMenu::Render3DSItems()
+{
+#ifndef DEDICATED
+    if ( !sr_glOut || exitFlag || quickexit || items.Len() <= 0 )
+        return;
+    if ( selected < 0 || selected >= items.Len() )
+        return;
+
+    // The scroll offset was already brought up to date when the top screen
+    // was drawn this frame, so the items only have to be painted here.
+    items[selected]->Render(center,YPos(selected),1,true);
+
+    for (int i=items.Len()-1;i>=0;i--)
+        if (i!=selected){
+            REAL y=YPos(i);
+            REAL alpha=1;
+            const REAL b=.1;
+            if (y<menuBot+b)
+                alpha=(y-menuBot)/b;
+            if (y>menuTop-b)
+                alpha=(menuTop-y)/b;
+            if (y>menuBot && y<menuTop)
+            {
+                rTextField::SetDefaultColor( tColor(1,1,1,1) );
+                rTextField::SetBlendColor( tColor(1,1,1,1) );
+                items[i]->Render(center,y,alpha,false);
+            }
+        }
+
+    rTextField::SetDefaultColor( tColor(1,1,1,1) );
+    rTextField::SetBlendColor( tColor(1,1,1,1) );
+
+    glDisable(GL_TEXTURE_2D);
+    Color(1,.2,.2,.5);
+    if (YPos(0)<menuBot+.1 && (int(tSysTimeFloat()))%2)
+        arrow(.9,menuBot+.1,-1,.05);
+    if (YPos(items.Len()-1)>menuTop && (int(tSysTimeFloat())+1)%2)
+        arrow(.9,menuTop,1,.05);
+#endif
+}
+
+int uMenu::ItemAt3DS(REAL, REAL y)
+{
+    // Rows are a text height apart, so half of that either side of a row's
+    // baseline is the natural hit box. Nothing else on the touch screen
+    // competes for the touch, so a generous box is only helpful.
+    const REAL reach = text_height * 0.9f;
+    int best = -1;
+    REAL bestDistance = reach;
+
+    for ( int i = items.Len() - 1; i >= 0; --i )
+    {
+        if ( !items[i]->IsSelectable() )
+            continue;
+        REAL itemY = YPos(i);
+        if ( itemY < menuBot || itemY > menuTop )
+            continue;
+        REAL distance = fabsf( y - itemY );
+        if ( distance < bestDistance )
+        {
+            bestDistance = distance;
+            best = i;
+        }
+    }
+    return best;
+}
+
+bool uMenu::HandleTouch3DS(REAL x, REAL y, bool pressed)
+{
+    uMenu * menu = su_3dsActiveMenu;
+    if ( !menu || menu->items.Len() <= 0 )
+        return false;
+
+    // Remembered so a touch that slides off an item does not activate it.
+    static int touched = -1;
+
+    int item = menu->ItemAt3DS( x, y );
+    if ( pressed )
+    {
+        touched = item;
+        if ( item >= 0 )
+        {
+            lastkey = tSysTimeFloat();
+            menu->SetSelected( item );
+        }
+        return item >= 0;
+    }
+
+    int released = touched;
+    touched = -1;
+    if ( released < 0 || released != item )
+        return false;
+
+    lastkey = tSysTimeFloat();
+    menu->SetSelected( released );
+    menu->items[released]->Enter();
+    return true;
+}
+#endif
 
 // select the menu item above "start"
 int uMenu::GetNextSelectable(int start)
@@ -1092,6 +1244,43 @@ bool uMenuItemString::Event(SDL_Event &e){
     return ret;
 #else
     return false;
+#endif
+}
+
+void uMenuItemString::Enter() {
+#ifdef __3DS__
+#ifndef DEDICATED
+    // The keyboard is a system applet and takes the GPU while it runs, so the
+    // Citro3D frame has to be closed before handing over and reopened after.
+    gl_wrapper_suspend_for_applet();
+    struct ResumeRendering
+    {
+        ~ResumeRendering() { gl_wrapper_resume_after_applet(); }
+    } resumeRendering;
+
+    int maxTextLength = maxLength_ > 0 ? maxLength_ : 1;
+    std::vector<char> text(static_cast<size_t>(maxTextLength) + 1, '\0');
+
+    SwkbdState keyboard;
+    swkbdInit(&keyboard, SWKBD_TYPE_NORMAL, 2, maxTextLength);
+    swkbdSetFeatures(&keyboard, SWKBD_DEFAULT_QWERTY | SWKBD_ALLOW_HOME);
+    swkbdSetHintText(&keyboard, "Enter text");
+    swkbdSetButton(&keyboard, SWKBD_BUTTON_LEFT, "Cancel", false);
+    swkbdSetButton(&keyboard, SWKBD_BUTTON_RIGHT, "OK", true);
+    swkbdSetInitialText(&keyboard, content->c_str());
+
+    SwkbdButton const pressed =
+        swkbdInputText(&keyboard, text.data(), text.size());
+    if (pressed == SWKBD_BUTTON_RIGHT) {
+        *content = text.data();
+        realCursorPos = content->size();
+    } else if (pressed == SWKBD_BUTTON_NONE) {
+        // The applet refused to run at all. Say so rather than looking like
+        // the entry was simply cancelled.
+        aa3ds_log("keyboard: software keyboard unavailable (result %d)",
+                  (int)swkbdGetResult(&keyboard));
+    }
+#endif
 #endif
 }
 
@@ -1889,6 +2078,15 @@ bool uMenu::Message(const tOutput& message, const tOutput& interpretation, REAL 
     con << interpretation << '\n';
 #else
     uAnimationPlayer player( animation );
+
+    // A message reads keyboard input without being a menu. Say so, or the
+    // 3DS input translation will not turn button presses into the key events
+    // this loop waits for, and the message can only be dismissed by timeout.
+    struct MessageActiveGuard
+    {
+        MessageActiveGuard() { su_inMessage = true; }
+        ~MessageActiveGuard() { su_inMessage = false; }
+    } messageActiveGuard;
 
     // reload textures (just in case)
     rITexture::UnloadAll();

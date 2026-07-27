@@ -1,0 +1,32 @@
+# Nintendo 3DS port.
+#
+# The ignore list at the top of the repository is written for the autotools
+# build that lives there, and several of its rules are wrong here: a bare
+# "Makefile" is generated at the root but hand written in this directory, and
+# the vendored dependencies below carry Makefile.am, Makefile.in and other
+# names that list expects to be build output. Start from a clean slate and
+# then ignore only what this build actually produces.
+!*
+
+# Built by platform/3ds/Makefile.
+build/
+build-full/
+*.3dsx
+*.cia
+*.elf
+*.smdh
+*.map
+*.log
+
+# Assembled from the repository's own data by prepare-romfs.
+romfs/
+
+# Written by protoc from src/protobuf.
+generated/
+
+# Cross build trees for the vendored dependencies, made by
+# build-dependencies.sh. The hand written ftgl makefile is not one of them.
+vendor/*-build-3ds/
+!vendor/ftgl-build-3ds/
+vendor/ftgl-build-3ds/*
+!vendor/ftgl-build-3ds/Makefile

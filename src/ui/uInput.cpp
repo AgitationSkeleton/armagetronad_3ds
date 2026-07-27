@@ -27,6 +27,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 #include <stdarg.h>
 #include "uInput.h"
+
+#ifdef __3DS__
+#include "aa3ds_runtime.h"
+#endif
 #include "tMemManager.h"
 #include "rScreen.h"
 #include "tInitExit.h"
@@ -776,6 +780,36 @@ private:
     // same for the public name
     tString GetName( char const * type, int subID, char const * suffix = NULL ) const
     {
+#ifdef __3DS__
+        static char const * buttonNames[] = {
+            "Start", "A", "B", "X", "Y", "L", "R", "Select", "ZL", "ZR"
+        };
+        if ( !strcmp(type, "button") && subID >= 0 && subID < 10 )
+        {
+            std::ostringstream buttonName;
+            buttonName << "3DS " << buttonNames[subID] << " Button";
+            return buttonName.str();
+        }
+        if ( !strcmp(type, "hat") && suffix )
+        {
+            std::ostringstream dpadName;
+            dpadName << "3DS D-Pad " << suffix;
+            return dpadName.str();
+        }
+        // Axes 2 and 3 are the C-stick of a New 3DS or a Circle Pad Pro.
+        if ( !strcmp(type, "axis") && ( subID == 2 || subID == 3 ) && suffix )
+        {
+            char const * direction;
+            if ( subID == 2 )
+                direction = !strcmp( suffix, "-" ) ? "left" : "right";
+            else
+                direction = !strcmp( suffix, "-" ) ? "up" : "down";
+
+            std::ostringstream stickName;
+            stickName << "3DS C-Stick " << direction;
+            return stickName.str();
+        }
+#endif
         std::ostringstream o;
         o << "Joystick " << id+1 << " " << type << " " << subID+1;
         if ( suffix )
@@ -788,9 +822,15 @@ private:
     // special axes: x and y
     tString GetName( char const * type ) const
     {
+#ifdef __3DS__
+        std::ostringstream circlePadName;
+        circlePadName << "3DS Circle Pad " << type;
+        return circlePadName.str();
+#else
         std::ostringstream o;
         o << "Joystick " << id+1 << " " << type;
         return o.str();
+#endif
     }
 };
 
@@ -841,6 +881,11 @@ void su_JoystickInit()
 {
     su_GetJoystickInput();
     SDL_JoystickEventState( SDL_ENABLE );
+#ifdef __3DS__
+    aa3ds_log( "input: %d joystick(s), %d opened",
+               SDL_NumJoysticks(),
+               (int)su_GetJoystickInput().joysticks.size() );
+#endif
 }
 #endif
 #endif

@@ -710,9 +710,9 @@ void nProtoBufDescriptorBase::StreamFromDefault( nStreamMessage & in, nProtoBuf 
         {
         case FieldDescriptor::CPPTYPE_INT32:
         {
-            int32 value;
+            int value;
             in >> value;
-            reflection->REFL_SET( SetInt32, &out, field, value );
+            reflection->REFL_SET( SetInt32, &out, field, static_cast< int32 >( value ) );
         }
         break;
         case FieldDescriptor::CPPTYPE_UINT32:
@@ -863,7 +863,7 @@ void nProtoBufDescriptorBase::StreamToDefault( nProtoBuf const & in, nStreamMess
         switch( field->cpp_type() )
         {
         case FieldDescriptor::CPPTYPE_INT32:
-            out << reflection->REFL_GET( GetInt32, in, field );
+            out << static_cast< int >( reflection->REFL_GET( GetInt32, in, field ) );
             break;
         case FieldDescriptor::CPPTYPE_UINT32:
             out.Write( reflection->REFL_GET( GetUInt32, in, field ) );

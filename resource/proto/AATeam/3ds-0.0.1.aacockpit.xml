@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="no"?>
+<!DOCTYPE Resource SYSTEM "cockpit.dtd">
+
+<!--
+    Cockpit for the Nintendo 3DS top screen.
+
+    The screen is 400x240, so sizes here are far larger than a desktop cockpit
+    uses: widget sizes are in viewport units where 2.0 spans the screen, which
+    makes a text height of 0.1 about twelve pixels. The desktop default of
+    0.039 works out at under five pixels here, which is why the stock cockpit
+    is unreadable on hardware.
+
+    Everything is pushed into the corners so the middle of the screen, where
+    the cycle and the wall ahead of it are, stays clear.
+
+    There is no Map widget: the 3DS client draws the arena map on the touch
+    screen instead, where it gets a whole screen to itself.
+
+    Toggle groups, switchable from System Setup and from COCKPIT_KEY_2..4:
+      2  scores
+      3  speed and brakes
+      4  player status and ping
+    Rubber has no toggle. It is the one reading you cannot play without.
+-->
+
+<Resource type="aacockpit" name="3ds" version="0.0.1" author="AATeam" category="">
+    <Cockpit version="0.0.1">
+
+        <WidgetTemplate id="text">
+            <Size height="0.1" width="0.05" />
+        </WidgetTemplate>
+
+        <WidgetTemplate id="smalltext">
+            <Size height="0.085" width="0.0425" />
+        </WidgetTemplate>
+
+        <!-- Rubber. The most important gauge, so it gets the widest bar and
+             sits bottom left where a right handed player's thumb is not. -->
+        <BarGauge>
+            <DataSet>
+                <AtomicData field="source" source="player_rubber" />
+                <AtomicData field="minimum" source="0" />
+                <AtomicData field="maximum" source="cycle_rubber" />
+            </DataSet>
+            <Position x="-0.72" y="-0.86" />
+            <Size height="0.06" width="0.17" />
+            <ShowCurrent value="true" />
+            <ShowMaximum value="false" />
+            <ShowMinimum value="false" />
+            <Caption location="top">
+                <Text value="Rubber" />
+            </Caption>
+            <Background>
+                <Solid>
+                    <Color r="0.1" g="0.1" b="0.1" alpha="0.6" />
+                </Solid>
+            </Background>
+            <Foreground>
+                <Gradient orientation="value">
+                    <Color r="0." g="1." b="0." alpha="1." at="0." />
+                    <Color r="0." g="1." b="0." alpha="1." at=".4" />
+                    <Color r="1." g="1." b="0." alpha="1." at=".7" />
+                    <Color r="1." g="0." b="0." alpha="1." at="1." />
+                </Gradient>
+            </Foreground>
+        </BarGauge>
+
+        <!-- Speed, as a number rather than a needle. A needle dial small
+             enough to fit here cannot be read at a glance. -->
+        <Label usetemplate="text" toggle="3">
+            <DataSet id="speed">
+                <AtomicData source="player_speed" precision="0" />
+            </DataSet>
+            <Position x="0.02" y="-0.86" />
+            <Caption location="off">
+                <Text value="Speed" />
+            </Caption>
+            <Face>
+                <Table>
+                    <Row>
+                        <Cell><Text value="0xaaaaaaSpeed " /></Cell>
+                        <Cell><Text value="0xffffff" /><GameData data="speed" /></Cell>
+                    </Row>
+                </Table>
+            </Face>
+        </Label>
+
+        <!-- Brakes. -->
+        <BarGauge toggle="3">
+            <DataSet>
+                <AtomicData field="source" source="player_brakes" />
+                <AtomicData field="minimum" source="0" />
+                <AtomicData field="maximum" source="1" />
+            </DataSet>
+            <Position x="0.74" y="-0.86" />
+            <Size height="0.06" width="0.11" />
+            <ShowCurrent value="false" />
+            <ShowMaximum value="false" />
+            <ShowMinimum value="false" />
+            <Caption location="top">
+                <Text value="Brakes" />
+            </Caption>
+            <Background>
+                <Solid>
+                    <Color r="0.1" g="0.1" b="0.1" alpha="0.6" />
+                </Solid>
+            </Background>
+            <Foreground>
+                <Solid>
+                    <Color r="0.3" g="0.7" b="1." alpha="1." />
+                </Solid>
+            </Foreground>
+        </BarGauge>
+
+        <!-- Score, mine against the current best. -->
+        <Label usetemplate="text" toggle="2">
+            <DataSet id="myscore">
+                <AtomicData source="current_score" />
+            </DataSet>
+            <DataSet id="topscore">
+                <AtomicData source="top_score" />
+            </DataSet>
+            <DataSet id="color">
+                <Conditional field="source" lvalue="current_score" rvalue="top_score" operator="ge">
+                    <IfTrue>
+                        <AtomicData source="0x11ff11" />
+                    </IfTrue>
+                    <IfFalse>
+                        <AtomicData source="0x11ffff" />
+                    </IfFalse>
+                </Conditional>
+            </DataSet>
+            <Position x="-0.95" y="0.60" />
+            <Caption location="off">
+                <Text value="Scores" />
+            </Caption>
+            <Face>
+                <Table>
+                    <Row>
+                        <Cell><Text value="0xaaaaaaScore " /></Cell>
+                        <Cell><GameData data="color" /><GameData data="myscore" /></Cell>
+                        <Cell><Text value="0xaaaaaa / " /></Cell>
+                        <Cell><Text value="0xffffff" /><GameData data="topscore" /></Cell>
+                    </Row>
+                </Table>
+            </Face>
+        </Label>
+
+        <!-- Who is still alive, and the connection quality online. -->
+        <Label usetemplate="smalltext" toggle="4">
+            <DataSet id="enemies">
+                <AtomicData source="enemies_alive" />
+            </DataSet>
+            <DataSet id="friends">
+                <AtomicData source="friends_alive" />
+            </DataSet>
+            <DataSet id="ping">
+                <AtomicData source="current_ping" precision="0" />
+            </DataSet>
+            <Position x="0.34" y="0.60" />
+            <Caption location="off">
+                <Text value="Player Status" />
+            </Caption>
+            <Face>
+                <Table>
+                    <Row>
+                        <Cell><Text value="0xff8888Foes " /></Cell>
+                        <Cell><Text value="0xffffff" /><GameData data="enemies" /></Cell>
+                        <Cell><Text value="0x88ff88 Mates " /></Cell>
+                        <Cell><Text value="0xffffff" /><GameData data="friends" /></Cell>
+                    </Row>
+                    <Row>
+                        <Cell><Text value="0xaaaaaaPing " /></Cell>
+                        <Cell><Text value="0xffffff" /><GameData data="ping" /></Cell>
+                    </Row>
+                </Table>
+            </Face>
+        </Label>
+
+    </Cockpit>
+</Resource>

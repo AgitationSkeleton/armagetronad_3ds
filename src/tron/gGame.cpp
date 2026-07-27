@@ -32,6 +32,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "eTeam.h"
 #include "tSysTime.h"
 #include "gGame.h"
+
+#ifdef __3DS__
+#include "aa3ds_runtime.h"
+#endif
 #include "rTexture.h"
 #include "gWall.h"
 #include "rConsole.h"
@@ -1374,6 +1378,11 @@ void s_Timestep(eGrid *grid, REAL time,bool cam){
 }
 
 #ifndef DEDICATED
+#ifdef __3DS__
+extern REAL sr_3dsStereoEyeOffset();
+extern REAL sr_3dsStereoFocalDistance;
+#endif
+
 void RenderAllViewports(eGrid *grid){
     rViewportConfiguration *conf=rViewportConfiguration::CurrentViewportConfiguration();
 
@@ -1444,10 +1453,45 @@ void Render(eGrid *grid, REAL time, bool swap=true){
             rDisplayList::ClearAll();
         }
 
-        RenderAllViewports(grid);
+#ifdef __3DS__
+        // A stereo frame draws the world twice, once per eye. What is drawn
+        // over it, the cockpit and the scores and the console, is put in both
+        // eyes at the end of the frame instead, because the engine draws those
+        // from per frame tasks that run after this and latch so they only run
+        // once. See the stereo block in rSysDep::SwapGL.
+        //
+        // The one thing here that is not repeatable is the cockpit camera
+        // view, which clears its own flag as it draws and so would appear in
+        // the second eye only. The 3DS cockpit has no camera widget, so that
+        // does not arise; a cockpit that added one would want the flag saved
+        // across the two passes.
+        REAL const eyeOffset = sr_3dsStereoEyeOffset();
+        if ( eyeOffset > 0 )
+        {
+            gl_wrapper_set_stereo_eye(
+                -eyeOffset, sr_3dsStereoFocalDistance );
+            RenderAllViewports(grid);
+            sr_ResetRenderState(true);
+            gLogo::Display();
 
-        sr_ResetRenderState(true);
-        gLogo::Display();
+            gl_wrapper_begin_right_eye();
+            gl_wrapper_set_stereo_eye(
+                eyeOffset, sr_3dsStereoFocalDistance );
+            RenderAllViewports(grid);
+            sr_ResetRenderState(true);
+            gLogo::Display();
+
+            gl_wrapper_end_right_eye();
+            gl_wrapper_set_stereo_eye( 0, sr_3dsStereoFocalDistance );
+        }
+        else
+#endif
+        {
+            RenderAllViewports(grid);
+
+            sr_ResetRenderState(true);
+            gLogo::Display();
+        }
 
         if (swap){
             rSysDep::SwapGL();
@@ -1932,6 +1976,11 @@ uMenu *sg_IngameMenu=NULL;
 uMenu *sg_HostMenu  =NULL;
 
 void ret_to_MainMenu(){
+#ifdef __3DS__
+    // Reconnecting used to run the heap out. Record what a session left
+    // behind so growth across sessions is visible.
+    aa3ds_log_memory( "leaving game" );
+#endif
     sg_RequestedDisconnection = true;
 
     if (sg_HostMenu)

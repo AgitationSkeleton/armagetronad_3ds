@@ -1002,7 +1002,9 @@ void st_LoadConfig( bool printChange )
     {
         Load( config, "default.cfg" );
 #ifndef DEDICATED
-#if SDL_VERSION_ATLEAST(2,0,0)
+#ifdef __3DS__
+        Load( config, "3ds/default.cfg" );
+#elif SDL_VERSION_ATLEAST(2,0,0)
         Load( config, "sdl2/default.cfg" );
 #else
         Load( config, "sdl1/default.cfg" );

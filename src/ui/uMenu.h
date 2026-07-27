@@ -155,6 +155,19 @@ public:
     uMenu(const tOutput &t,bool exit_item=true);
     virtual ~uMenu();
 
+#ifdef __3DS__
+    //! Draws only the item list. The 3DS splits a menu across both screens:
+    //! the title and the help for the selected item stay on the top screen,
+    //! and the items go on the touch screen where they can be tapped.
+    void Render3DSItems();
+    //! Item under a point in touch screen device coordinates, or -1.
+    int ItemAt3DS(REAL x, REAL y);
+    //! The menu currently on screen, or NULL.
+    static uMenu * Active3DS();
+    //! Routes a touch to the item list. Returns true if it was consumed.
+    static bool HandleTouch3DS(REAL x, REAL y, bool pressed);
+#endif
+
     //! enters the menu; calls idle_func before rendering every frame
     inline void Enter(){OnEnter();}
 
@@ -180,6 +193,10 @@ public:
 
     //! returns whether there is currently an active menu
     static bool MenuActive();
+    //! True while a modal message, such as a server's message of the day, is
+    //! on screen. It reads keyboard input but is not a menu, so anything that
+    //! keys off MenuActive has to account for it separately.
+    static bool MessageActive();
 protected:
     //! handles a key press
     virtual void HandleEvent( SDL_Event event );
@@ -526,6 +543,7 @@ public:
     virtual void Render(REAL x,REAL y,REAL alpha=1,bool selected=0);
 
     virtual bool Event(SDL_Event &e);
+    virtual void Enter();
 
     uMenu *MyMenu(){return menu;}
 

@@ -47,6 +47,13 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "tConfiguration.h"
 #include "tRecorder.h"
 #include "rTextureRenderTarget.h"
+
+#ifdef __3DS__
+#include <3ds.h>
+#include <ctime>
+#include "aa3ds_runtime.h"
+#include "uMenu.h"
+#endif
 #include <memory>
 
 #ifndef DEDICATED
@@ -661,7 +668,9 @@ public:
         // do the actual buffer swap.
         if( reallyDoIt )
         {
-#if SDL_VERSION_ATLEAST(2,0,0)
+#ifdef __3DS__
+            gl_wrapper_swap_buffers();
+#elif SDL_VERSION_ATLEAST(2,0,0)
             SDL_GL_SwapWindow(sr_screen);
 #else
             SDL_GL_SwapBuffers();
@@ -1497,12 +1506,102 @@ void rSysDep::SwapGL(){
     rPerFrameTaskRuby::DoPerFrameTasks();
 #endif
 
+#ifdef __3DS__
+    // The world was drawn once per eye back in the frame, but the cockpit, the
+    // scores and the console are drawn here, by per frame tasks, and only
+    // reach whichever framebuffer is current. Draw them again into the other
+    // one. They sit at the depth of the screen either way, so there is no eye
+    // offset to apply, only a target to change.
+    if ( gl_wrapper_stereo_active() )
+    {
+        extern void sg_Display3DSCockpitSecondEye();
+        extern void se_Display3DSScoresSecondEye();
+        extern void sr_Render3DSSecondEye();
+
+        gl_wrapper_select_target( GFX_TOP, GFX_RIGHT );
+        sg_Display3DSCockpitSecondEye();
+        se_Display3DSScoresSecondEye();
+        sr_Render3DSSecondEye();
+        gl_wrapper_select_target( GFX_TOP, GFX_LEFT );
+    }
+
+    if ( aa3ds_close_requested() )
+    {
+        // The system asked the client to close and is showing "Closing
+        // software..." until it does. Leave by the same route the desktop
+        // client takes when its window is closed.
+        static bool handled = false;
+        if ( !handled )
+        {
+            handled = true;
+            aa3ds_log( "apt: saving configuration and quitting" );
+            st_SaveConfig();
+            uMenu::quickexit = uMenu::QuickExit_Total;
+        }
+    }
+
+    // Picks up a change made from the settings menu, which writes the variable
+    // without going through the configuration item.
+    {
+        extern void sr_Apply3DSVideoSettings();
+        sr_Apply3DSVideoSettings();
+    }
+
+    aa3ds_render_bottom_screen();
+
+    {
+        // No face or shoulder button is free for a bindable screenshot action,
+        // so use the L+R+Select combo homebrew conventionally reserves for it.
+        static bool combinationWasHeld = false;
+        const u32 combination = KEY_L | KEY_R | KEY_SELECT;
+
+        // The scripted input bridge publishes its own button mask, so a test
+        // harness can take screenshots the same way a player does.
+        unsigned int scripted = 0;
+        int scriptedTouchX = 0;
+        int scriptedTouchY = 0;
+        if (!aa3ds_debug_input(&scripted, &scriptedTouchX, &scriptedTouchY))
+            scripted = 0;
+
+        const bool combinationHeld =
+            ((hidKeysHeld() | scripted) & combination) == combination;
+        if (combinationHeld && !combinationWasHeld)
+        {
+            // std:: qualified because the enclosing function has a time parameter
+            std::time_t now;
+            char stamp[32];
+            std::time(&now);
+            std::strftime(
+                stamp, sizeof(stamp) - 1, "%Y-%m-%d_%H-%M-%S", std::localtime(&now));
+            sr_screenshotName = stamp;
+            sr_screenshotIsPlanned = true;
+            aa3ds_log("screenshot: %s", stamp);
+        }
+        combinationWasHeld = combinationHeld;
+    }
+#endif
+
     // unlock the mutex while waiting for the swap operation to finish
     // SDL_mutexV(  sr_netLock );
     // sr_LockSDL();
 
     if (sr_screenshotIsPlanned){
         make_screenshot();
+#ifdef __3DS__
+        // In stereo there are two pictures on the top screen and only one of
+        // them has just been saved. Take the other one too, named so the pair
+        // stays together, rather than silently keeping half of what was on
+        // screen.
+        if ( gl_wrapper_stereo_active() )
+        {
+            tString const leftName( sr_screenshotName );
+            sr_screenshotName = leftName + "_right";
+            gl_wrapper_select_target( GFX_TOP, GFX_RIGHT );
+            make_screenshot();
+            gl_wrapper_select_target( GFX_TOP, GFX_LEFT );
+            sr_screenshotName = leftName;
+        }
+#endif
         sr_screenshotIsPlanned=false;
     }
     else if (s_videoout)

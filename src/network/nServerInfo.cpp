@@ -39,6 +39,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include "nSocket.h"
 
 #include "nServerInfo.h"
+
+#ifdef __3DS__
+#include "aa3ds_runtime.h"
+#endif
 #include "nNetObject.h"
 
 #include "nProtoBuf.h"
@@ -1714,6 +1718,16 @@ nServerInfoBase *nServerInfo::GetFromMaster(nServerInfoBase *masterInfo, char co
             o << "$network_master_status";
             con << o;
             lastReported = (sn_ServerCount/10) * 10;
+#ifdef __3DS__
+            // The console froze partway through this loop once. Record how
+            // much room was left each time the count is reported, so a repeat
+            // says whether it ran out.
+            {
+                char tag[32];
+                snprintf( tag, sizeof(tag), "master list %d", lastReported );
+                aa3ds_log_memory( tag );
+            }
+#endif
         }
     }
 

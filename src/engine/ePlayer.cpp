@@ -7116,6 +7116,17 @@ static bool se_alreadyDisplayedScores = false;
 
 static bool show_scores=false;
 
+#ifdef __3DS__
+void se_Display3DSScoresSecondEye()
+{
+    // See sr_Render3DSSecondEye: the same once a frame latch, dropped for the
+    // second eye and put back so the next frame's first eye still draws.
+    se_alreadyDisplayedScores = false;
+    ePlayerNetID::DisplayScores();
+    se_alreadyDisplayedScores = false;
+}
+#endif
+
 void ePlayerNetID::DisplayScores()
 {
     if( !show_scores || !se_mainGameTimer || se_alreadyDisplayedScores )

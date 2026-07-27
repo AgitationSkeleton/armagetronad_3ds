@@ -172,8 +172,8 @@ gZone::gZone( eGrid * grid, const eCoord & pos )
 
     // initialize position functions
     SetPosition( pos );
-    eSoundMixer* mixer = eSoundMixer::GetMixer();
-    mixer->PushButton(ZONE_SPAWN, pos);
+    eSoundMixer& mixer = eSoundMixer::GetMixer();
+    mixer.PushButton(ZONE_SPAWN, *this);
 }
 
 // *******************************************************************************
@@ -203,8 +203,8 @@ gZone::gZone( Game::ZoneV1Sync const & sync, nSenderInfo const & sender )
 
     // initialize position functions
     SetPosition( pos );
-    eSoundMixer* mixer = eSoundMixer::GetMixer();
-    mixer->PushButton(ZONE_SPAWN, pos);
+    eSoundMixer& mixer = eSoundMixer::GetMixer();
+    mixer.PushButton(ZONE_SPAWN, *this);
 }
 
 // *******************************************************************************

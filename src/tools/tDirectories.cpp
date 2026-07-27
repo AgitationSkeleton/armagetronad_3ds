@@ -203,7 +203,8 @@ static tString st_MusicDir(expand_home_c(DATA_DIR));    // directory for game mu
 static tString st_UserDataDir(expand_home_c(USER_DATA_DIR));    // directory for game data
 
 // load data from unbranded configuration directory on branded builds in Linux
-#if !defined DEDICATED && !defined MACOSX && !defined LEGACY_USER_DATA_DIR && !defined DEBUG
+#if !defined DEDICATED && !defined MACOSX && !defined LEGACY_USER_DATA_DIR && \
+    !defined DEBUG && !defined __3DS__
 #define LEGACY_USER_DATA_DIR "~/.armagetronad"
 #define LEGACY_USER_DATA_DIR2 "~/." PROGDIR
 #endif
@@ -493,7 +494,7 @@ char *eh_getdir(const char *da, size_t *len) {
             if (ssf && SHGetSpecialFolderPath(NULL, path, ssf, 1))
                 ret = strdup(path);
         }
-# else
+# elif !defined(__3DS__)
 
         if (type)
         {
@@ -679,6 +680,16 @@ private:
         int pos = 0;
 
         paths[ pos++ ] = st_MusicDir;
+
+#ifdef __3DS__
+        // The packaged music lives in read only RomFS, so the SD card folder
+        // is the only place a user can add their own.
+        if ( st_UserDataDir.Len() > 1 )
+        {
+            paths[ pos++ ] = st_UserDataDir;
+            paths[ pos++ ] = st_UserDataDir + "/music";
+        }
+#endif
     }
 };
 
@@ -904,7 +915,7 @@ bool tPath::Open    ( std::ofstream& f,
 
     tString fullname = GetWritePath(filename);
 
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__3DS__)
     mode_t oldmask=0;
     if(sensitive && st_protectFiles)
     {
@@ -912,7 +923,7 @@ bool tPath::Open    ( std::ofstream& f,
     }
 #endif
     f.open( fullname, mode );
-#ifndef WIN32
+#if !defined(WIN32) && !defined(__3DS__)
     if(sensitive && st_protectFiles)
     {
         chmod( &fullname(0), 0600 );
@@ -1659,6 +1670,20 @@ struct tRunningInBuildDirectory
 // binary path
 static tString GeneratePrefix()
 {
+#ifdef __3DS__
+    // There is no install prefix to relocate on this console. Every directory
+    // is an absolute RomFS or SD card path fixed at build time, so the answer
+    // is always the compiled in prefix.
+    //
+    // This mattered: the homebrew launcher passes a path such as
+    // sdmc:/3ds/armagetronad-3ds.3dsx as argv[0], from which the relocation
+    // code derived a "binary directory" of ./sdmc:/3ds, compared it against
+    // the compiled in /usr/local/bin, found no relationship and raised a fatal
+    // error before the client drew a single frame. Emulators hand the process
+    // an empty argv, so the relocation code short circuited there and the
+    // failure only ever appeared on real hardware.
+    return st_prefixCompiled;
+#else
     // fetch prefix as it was compiled in
     tString const & prefixCompiled = st_prefixCompiled;
     // the binary path as it was compiled in
@@ -1711,6 +1736,7 @@ static tString GeneratePrefix()
 #endif
 
     return prefixNow;
+#endif
 }
 
 // returns the complete prefix the game was installed in (defaults to /usr/local)

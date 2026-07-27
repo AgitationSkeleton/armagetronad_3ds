@@ -4747,7 +4747,7 @@ public:
     nMachinePTR & operator=(nMachinePTR const & other){ machine = other.machine; other.machine=0;return *this;}
 };
 
-typedef sockaddr nMachineKey;
+typedef sockaddr_in nMachineKey;
 
 bool operator < ( nMachineKey const & a, nMachineKey const & b )
 {
@@ -4769,26 +4769,27 @@ static nMachineMap & sn_GetMachineMap()
     return map;
 }
 
-static nMachine & sn_LookupMachine( nMachineKey const * address )
+static nMachine & sn_LookupMachine( sockaddr const * address )
 {
     // get map of all machines and look address up
     nMachineMap & map = sn_GetMachineMap();
-    nMachine & ret = *map[ *address ].machine;
+    nMachineKey const & key = *reinterpret_cast< nMachineKey const * >( address );
+    nMachine & ret = *map[ key ].machine;
     if( ret.GetIP().Len() <= 2 )
     {
         nAddress addr;
-        sockaddr * target = addr;
-        *target = *address;
+        addr.FromSockAddr( sizeof( key ), address );
         ret.SetIP( addr.GetAddress() );
     }
     return ret;
 }
 
-static nMachine * sn_PeekMachine( nMachineKey const * address )
+static nMachine * sn_PeekMachine( sockaddr const * address )
 {
     // get map of all machines and look address up
     nMachineMap & map = sn_GetMachineMap();
-    nMachineMap::const_iterator i = map.find( *address );
+    nMachineKey const & key = *reinterpret_cast< nMachineKey const * >( address );
+    nMachineMap::const_iterator i = map.find( key );
     if( i != map.end() )
     {
         return (*i).second.machine;

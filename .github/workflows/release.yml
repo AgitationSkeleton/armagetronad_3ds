@@ -1,0 +1,53 @@
+name: Release
+
+# Tagging publishes a release with the two things a 3DS can actually run: the
+# 3dsx for the Homebrew Launcher and the CIA for installing as a title. The
+# build itself is the same workflow pushes use, so a release is never built by
+# a path nobody has exercised.
+
+on:
+  push:
+    tags: [ 'v*' ]
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: Publish
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download build
+        uses: actions/download-artifact@v4
+        with:
+          name: armagetronad-3ds
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${GITHUB_REF_NAME}"
+          cat > notes.md <<EOF
+          Nintendo 3DS build of Armagetron Advanced, \`${version}\`.
+
+          | File | Use |
+          | --- | --- |
+          | \`armagetronad-3ds.cia\` | Install with FBI. Appears on the HOME menu. |
+          | \`armagetronad-3ds.3dsx\` | Copy to \`sdmc:/3ds/\` and run from the Homebrew Launcher. |
+
+          On first run the game creates \`sdmc:/3ds/armagetronad\`, which works
+          like the user data directory of the desktop client: drop a moviepack,
+          textures, cockpits or music in there and they are picked up.
+
+          See the README for controls and settings.
+          EOF
+          gh release create "$version" \
+            --title "Armagetron Advanced 3DS $version" \
+            --notes-file notes.md \
+            dist/armagetronad-3ds.cia \
+            dist/armagetronad-3ds.3dsx

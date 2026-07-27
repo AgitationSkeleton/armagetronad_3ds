@@ -277,12 +277,14 @@ tCommandLineParser::tCommandLineParser( void )
 
 const char * tCommandLineParser::Executable( void ) const
 {
-    return argv[ 0 ];
+    if ( argc > 0 && argv && argv[ 0 ] )
+        return argv[ 0 ];
+    return "armagetronad";
 }
 
 const char * tCommandLineParser::ExecutableName() const
 {
-    const char *run = argv[ 0 ];
+    const char *run = Executable();
     const char *name = run;
     while ( *run )
     {

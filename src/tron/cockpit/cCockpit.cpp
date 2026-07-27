@@ -846,6 +846,16 @@ static void display_cockpit_lucifer() {
 
 static rPerFrameTask dfps(&display_cockpit_lucifer);
 
+#ifdef __3DS__
+void sg_Display3DSCockpitSecondEye()
+{
+    // The cockpit is drawn by the per frame task above, which runs once and
+    // draws into whichever framebuffer is current. Called again with the other
+    // one selected, it puts the same gauges in the other eye.
+    display_cockpit_lucifer();
+}
+#endif
+
 static uActionGlobal cockpitKey1("COCKPIT_KEY_1");
 static uActionGlobal cockpitKey2("COCKPIT_KEY_2");
 static uActionGlobal cockpitKey3("COCKPIT_KEY_3");
@@ -882,6 +892,18 @@ bool cCockpit::ProcessKey2(float i) { return ProcessKey(i, 2); }
 bool cCockpit::ProcessKey3(float i) { return ProcessKey(i, 3); }
 bool cCockpit::ProcessKey4(float i) { return ProcessKey(i, 4); }
 bool cCockpit::ProcessKey5(float i) { return ProcessKey(i, 5); }
+
+#ifdef __3DS__
+void cCockpit::SetGroupActive(int id, bool state) {
+    FOREACH_COCKPIT(cockpit) {
+        std::multimap<int, cWidget::Base *> &handlers = (*cockpit)->m_EventHandlers;
+        for(std::multimap<int, cWidget::Base *>::iterator iter = handlers.find(id);
+            iter != handlers.end() && iter->first == id; ++iter) {
+            iter->second->SetActive(state);
+        }
+    }
+}
+#endif
 
 bool cCockpit::HandleEvent(int id, bool state) {
     if(m_EventHandlers.count(id)){

@@ -61,6 +61,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <bitset>
 #include "tCrypto.h"
 
+#ifdef __3DS__
+#include <3ds.h>
+#include <sys/stat.h>
+#include "aa3ds_runtime.h"
+#endif
+
 #include "nServerInfo.h"
 #include "nSocket.h"
 #include "tRuby.h"
@@ -190,8 +196,10 @@ void sg_StartupPlayerMenu()
     net.NewChoice( "$first_setup_net_isdn", "$first_setup_net_isdn_help", gISDN );
     net.NewChoice( "$first_setup_net_dsl", "$first_setup_net_dsl_help", gDSL );
 
+#ifdef __3DS__
+    tString keyboardTemplate("");
+#else
     tString keyboardTemplate("keys_cursor.cfg");
-
     uMenuItemSelection<tString> k(&firstSetup, "$first_setup_keys", "$first_setup_keys_help", keyboardTemplate );
     if ( !st_FirstUse )
     {
@@ -210,6 +218,7 @@ void sg_StartupPlayerMenu()
 
 #ifdef DEBUG
     k.NewChoice( "none", "none", tString("") );
+#endif
 #endif
 
     tColor leave(0,0,0,0);
@@ -284,7 +293,9 @@ void sg_StartupPlayerMenu()
     if( keyboardTemplate.Len() > 1 )
     {
         std::ostringstream fullName;
-#if SDL_VERSION_ATLEAST(2,0,0)
+#ifdef __3DS__
+        fullName << "3ds/";
+#elif SDL_VERSION_ATLEAST(2,0,0)
         fullName << "sdl2/";
 #else
         fullName << "sdl1/";
@@ -678,7 +689,14 @@ tConfItem<tString> sn_configurationSavedInVersionConf("SAVED_IN_VERSION",sn_conf
 struct SDLCleanup
 {
     // no init, that requires parameters and gives a return
-    ~SDLCleanup(){SDL_Quit();}
+    ~SDLCleanup(){
+#ifdef __3DS__
+        SDL_QuitSubSystem(SDL_INIT_EVERYTHING & ~SDL_INIT_VIDEO);
+        gl_wrapper_shutdown_platform();
+#else
+        SDL_Quit();
+#endif
+    }
 };
 struct SDLSoundCleanup
 {
@@ -688,6 +706,87 @@ struct SDLSoundCleanup
 }
 
 int main(int argc,char **argv){
+#ifdef __3DS__
+    if (R_FAILED(romfsInit()))
+        return 1;
+
+    struct RomfsCleanup
+    {
+        ~RomfsCleanup() { romfsExit(); }
+    } romfsCleanup;
+
+    // The SD card folder mirrors the layout of a desktop user data directory,
+    // so mods, moviepacks, cockpits and sound packs made for the PC client
+    // drop straight in. The folders are created empty on first run so it is
+    // obvious where each kind of content belongs.
+    static char const * const sg_3dsUserDirectories[] = {
+        "sdmc:/3ds",
+        "sdmc:/3ds/armagetronad",
+        "sdmc:/3ds/armagetronad/config",
+        "sdmc:/3ds/armagetronad/var",
+        "sdmc:/3ds/armagetronad/screenshots",
+        "sdmc:/3ds/armagetronad/resource",
+        "sdmc:/3ds/armagetronad/resource/automatic",
+        "sdmc:/3ds/armagetronad/moviepack",
+        "sdmc:/3ds/armagetronad/textures",
+        "sdmc:/3ds/armagetronad/models",
+        "sdmc:/3ds/armagetronad/sound",
+        "sdmc:/3ds/armagetronad/music",
+    };
+    for ( char const * directory : sg_3dsUserDirectories )
+        mkdir( directory, 0777 );
+
+    {
+        char const * const readmePath = "sdmc:/3ds/armagetronad/README.txt";
+        struct stat readmeInfo;
+        if ( stat( readmePath, &readmeInfo ) != 0 )
+        {
+            std::ofstream readme( readmePath );
+            readme <<
+                "Armagetron Advanced for Nintendo 3DS\n"
+                "====================================\n"
+                "\n"
+                "This folder works like the user data directory of the desktop\n"
+                "client, so content made for the PC version can be used here\n"
+                "unchanged. Files placed here are used in preference to nothing;\n"
+                "the packaged copies inside the application are used when a file\n"
+                "is not found here.\n"
+                "\n"
+                "  moviepack/    A moviepack. Drop the contents of a moviepack\n"
+                "                here, so that moviepack/settings.cfg exists.\n"
+                "                Enable it under System Setup, Misc Stuff.\n"
+                "  textures/     Replacement textures.\n"
+                "  models/       Replacement cycle and wall models (.mod).\n"
+                "  sound/        Replacement sound effects.\n"
+                "  music/        Music tracks and playlists.\n"
+                "  resource/     Maps, cockpits and other resources, in the same\n"
+                "                author/category/name-version.aamap.xml layout the\n"
+                "                desktop client uses. Downloads land in\n"
+                "                resource/automatic.\n"
+                "  config/       Your settings. Written by the game.\n"
+                "  var/          Score and ladder logs. Written by the game.\n"
+                "  screenshots/  Screenshots, taken with L+R+Select.\n"
+                "\n"
+                "armagetron.log is a log of the last run. Creating an empty file\n"
+                "named debug_input here turns on verbose diagnostics.\n";
+        }
+    }
+
+    FILE *runtimeLog = freopen("sdmc:/3ds/armagetronad/armagetron.log", "w", stderr);
+    if (runtimeLog)
+        setvbuf(stderr, NULL, _IONBF, 0);
+
+    aa3ds_runtime_init();
+    aa3ds_log("Armagetron Advanced 3DS startup");
+
+    // The BSD socket calls the network layer makes are no-ops until SOC is up.
+    aa3ds_network_init();
+
+    struct NetworkCleanup
+    {
+        ~NetworkCleanup() { aa3ds_network_shutdown(); }
+    } networkCleanup;
+#endif
     //std::cout << "enter\n";
     //  net_test();
 
@@ -784,7 +883,17 @@ int main(int argc,char **argv){
         if (SDL_Init(flags) < 0) {
             tERR_ERROR("Couldn't initialize SDL: " << SDL_GetError());
         }
+#ifndef __3DS__
         atexit(SDL_Quit);
+#else
+        // No atexit(SDL_Quit) here. The 3DS screen setup creates its surface
+        // with SDL_CreateRGBSurface rather than SDL_SetVideoMode, so SDL's
+        // video driver never owns a surface, and N3DS_VideoQuit dereferences
+        // one during shutdown. SDLCleanup below quits every subsystem except
+        // video and tears the Citro3D layer down itself, so SDL_Quit would
+        // only be repeating work that has already been done, on state that no
+        // longer exists.
+#endif
         // su_KeyInit();
 
         su_KeyInit();
@@ -816,7 +925,13 @@ int main(int argc,char **argv){
 #endif
 
         // tERR_MESSAGE( "Loading configuration." );
+#ifdef __3DS__
+        aa3ds_log("Loading languages");
+#endif
         tLocale::Load("languages.txt");
+#ifdef __3DS__
+        aa3ds_log("Languages loaded");
+#endif
 
         eLadderLogInitializer ladderlog;
         st_LoadConfig();
@@ -900,7 +1015,14 @@ int main(int argc,char **argv){
 
             SDLCleanup sdlCleanup; // call SDL_Quit later
 
+#ifdef __3DS__
+            aa3ds_log("Initializing SDL renderer services");
+#endif
             sr_glRendererInit();
+#ifdef __3DS__
+            aa3ds_log("SDL renderer services initialized");
+            aa3ds_log_memory("renderer ready");
+#endif
 
 #if SDL_VERSION_ATLEAST(2,0,0)
             SDL_SetEventFilter(&filter, 0);
@@ -962,6 +1084,9 @@ int main(int argc,char **argv){
                     }
 #endif
 
+#ifdef __3DS__
+                    aa3ds_log("Entering main menu");
+#endif
                     MainMenu();
 
                     // remove all players
@@ -992,8 +1117,16 @@ int main(int argc,char **argv){
                 //std::cout << "saved\n";
 
                 //    cleanup(grid);
+#ifndef __3DS__
                 SDL_QuitSubSystem(SDL_INIT_VIDEO);
+#endif
             }
+#ifdef __3DS__
+            else
+            {
+                aa3ds_log("Display initialization failed");
+            }
+#endif
 
 
 #else // DEDICATED
@@ -1018,10 +1151,18 @@ int main(int argc,char **argv){
     }
     catch ( tCleanQuit const & e )
     {
+#ifdef __3DS__
+        aa3ds_log("Clean quit");
+#endif
         return 0;
     }
     catch ( tException const & e )
     {
+#ifdef __3DS__
+        fprintf(stderr, "Armagetron exception: %s: %s\n",
+                static_cast<const char *>(e.GetName()),
+                static_cast<const char *>(e.GetDescription()));
+#endif
         try
         {
             st_PresentError( e.GetName(), e.GetDescription() );
@@ -1034,6 +1175,9 @@ int main(int argc,char **argv){
     }
     catch ( std::exception & e )
     {
+#ifdef __3DS__
+        aa3ds_log("Standard exception: %s", e.what());
+#endif
         try
         {
             st_PresentError("", e.what());
@@ -1061,6 +1205,9 @@ int main(int argc,char **argv){
 #endif
     catch(...)
     {
+#ifdef __3DS__
+        aa3ds_log("Unknown exception");
+#endif
         return 1;
     }
 

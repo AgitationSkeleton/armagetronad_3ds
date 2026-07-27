@@ -50,10 +50,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #include <stdlib.h>
 #include <vector>
 
+#ifdef __3DS__
+#include <fcntl.h>
+#include "aa3ds_runtime.h"
+#endif
+
 #ifndef WIN32
 #include <arpa/inet.h>
+#ifndef __3DS__
 #include <netinet/ip.h>
 #include <netinet/in_systm.h>
+#endif
 #include <netinet/in.h>
 #include <netdb.h>
 #include <sys/param.h>
@@ -261,6 +268,11 @@ int ANET_GetSocketAddr (int sock, struct sockaddr *addr);
 
 static inline void Sys_Error(const char *x){
     con << x;
+#ifdef __3DS__
+    // The in-game console goes with the process. Put it somewhere that
+    // survives, because this path calls exit() and takes the client with it.
+    aa3ds_log( "fatal socket error: %s", x );
+#endif
     exit(-1);
 }
 
@@ -335,8 +347,10 @@ static nSocketError ANET_Error()
         case EADDRNOTAVAIL:
             aError = nSocketError_Reset;
             break;
+#ifdef ESHUTDOWN
         case ESHUTDOWN:
             break;
+#endif
     #ifndef WIN32
         case EMSGSIZE:
             break;
@@ -1350,7 +1364,7 @@ const nAddress & nAddress::ToString( tString & string ) const
 const nAddress & nAddress::ToStringCore( tString & string ) const
 {
     if( addr_.addr_in.sin_addr.s_addr != INADDR_ANY )
-        string = ANET_AddrToString( &addr_.addr  );
+        string = ANET_AddrToString( SockAddr() );
     else
     {
         string = "*.*.*.*";
@@ -1405,14 +1419,14 @@ int nAddress::FromString( const char * string )
         ipaddr = (ha1 << 24) | (ha2 << 16) | (ha3 << 8) | ha4;
 
         // store values in address
-        addr_.addr   .sa_family = AF_INET;
+        addr_.addr_in.sin_family = AF_INET;
         addr_.addr_in.sin_addr.s_addr = htonl(ipaddr);
         addr_.addr_in.sin_port = htons(hp);
         return 0;
     }
     else
     {
-        addr_.addr   .sa_family = AF_INET;
+        addr_.addr_in.sin_family = AF_INET;
 
         // find colon
         int colonPos = source.StrPos(":");
@@ -1505,7 +1519,7 @@ void nAddress::FromSockAddrCore( int length, sockaddr const * addr )
     tASSERT( length <= size );
 
     // copy the address over
-    // addr_.addr   .sa_family = AF_INET;
+    // addr_.addr_in.sin_family = AF_INET;
     memcpy( &addr_, addr, length );
 
     // store length
@@ -1557,7 +1571,7 @@ const nAddress & nAddress::GetHostname( tString & hostname ) const
     {
         const int hostlen=1000;
         char host[hostlen+1];
-        int ret = getnameinfo ( &addr_.addr, addrLen_, host, hostlen, NULL, 0, 0 );
+        int ret = getnameinfo ( SockAddr(), addrLen_, host, hostlen, NULL, 0, 0 );
         if (!ret)
         {
             hostname = host;
@@ -1608,7 +1622,7 @@ nAddress & nAddress::SetHostname( const char * hostname )
     // parse IP address if the passed name looks like one
     if (hostname[0] >= '0' && hostname[0] <= '9')
     {
-        PartialIPAddress (hostname, &addr_.addr, GetPort(), 0x7f000001 );
+        PartialIPAddress (hostname, SockAddr(), GetPort(), 0x7f000001 );
         return *this;
     }
 
@@ -1682,7 +1696,7 @@ nAddress & nAddress::SetAddress( const char * hostname )
     // parse IP address if the passed name looks like one
     tVERIFY(hostname[0] >= '0' && hostname[0] <= '9')
 
-    PartialIPAddress (hostname, &addr_.addr, GetPort(), 0x7f000001 );
+    PartialIPAddress (hostname, SockAddr(), GetPort(), 0x7f000001 );
     return *this;
 }
 
@@ -1807,7 +1821,7 @@ int nAddress::Compare( const nAddress & a1, const nAddress & a2 )
     a1.CompleteDNS();
     a2.CompleteDNS();
 
-    if (a1.addr_.addr.sa_family != a2.addr_.addr.sa_family)
+    if (a1.addr_.addr_in.sin_family != a2.addr_.addr_in.sin_family)
         return -1;
 
     if (a1.addr_.addr_in.sin_addr.s_addr != a2.addr_.addr_in.sin_addr.s_addr)
@@ -1891,14 +1905,23 @@ int nSocket::Create( void )
     int socktype = socktype_;
 #ifndef WIN32
 #ifndef MACOSX
+#ifdef SOCK_CLOEXEC
     socktype |= SOCK_CLOEXEC;
+#endif
 #endif
 #endif
 
     // open new socket
     socket_ = socket( family_, socktype, protocol_ );
     if ( socket_ < 0 )
+    {
+#ifdef __3DS__
+        aa3ds_log(
+            "socket: creation failed, family %d type %d protocol %d, errno %d",
+            family_, socktype, protocol_, errno );
+#endif
         return -1;
+    }
 
     // TODO: IP_TOS only Supported under Windows 2000
     // See: http://msdn.microsoft.com/library/default.asp?url=/library/en-us/winsock/winsock/socket_options.asp
@@ -1930,8 +1953,38 @@ int nSocket::Create( void )
 #endif
 
     // unblock it
+#ifdef __3DS__
+    {
+        // libctru implements ioctl(FIONBIO) on top of fcntl and rejects
+        // everything else with ENOTTY, and the SOC service is stricter on
+        // hardware than under emulation. Failing here used to be fatal: the
+        // caller reported "unable to open control socket" and called exit(),
+        // which then faulted on the way out. Fall back to setting the flag
+        // directly, and say which call refused if neither works.
+        unsigned long nonBlocking = true;
+        if ( ioctl( socket_, FIONBIO, &nonBlocking ) != -1 )
+            return 0;
+
+        int const ioctlError = errno;
+
+        int flags = fcntl( socket_, F_GETFL, 0 );
+        if ( flags != -1 && fcntl( socket_, F_SETFL, flags | O_NONBLOCK ) != -1 )
+        {
+            aa3ds_log(
+                "socket: ioctl(FIONBIO) refused (errno %d), used fcntl instead",
+                ioctlError );
+            return 0;
+        }
+
+        aa3ds_log(
+            "socket: cannot set non-blocking mode, ioctl errno %d, fcntl errno %d",
+            ioctlError, errno );
+        return 1;
+    }
+#else
     unsigned long _true = true;
     return ioctl (socket_, FIONBIO, &_true) == -1;
+#endif
 }
 
 // archives the binding procedure
@@ -1993,6 +2046,48 @@ int nSocket::Bind( nAddress const & addr )
     {
         // just delegate
         ret = bind( socket_, addr, addr.GetAddressLength() );
+
+#ifdef __3DS__
+        if ( 0 != ret )
+        {
+            int const requestedPort = addr.GetPort();
+            int const firstError = errno;
+
+            aa3ds_log(
+                "socket: bind refused, port %d, length %u, errno %d",
+                requestedPort, addr.GetAddressLength(), firstError );
+
+            // A desktop stack picks a free port when asked to bind to port
+            // zero. The SOC service does not, and answers EINVAL, which made
+            // opening the control socket fatal and took the client down with
+            // it. Walk a small range and take the first port that binds.
+            if ( 0 == requestedPort )
+            {
+                // Above the default game port, so a client picking a local
+                // port never collides with a server listening on this console.
+                int const firstCandidate = 4544;
+                nAddress retry( addr );
+                for ( int port = firstCandidate;
+                      0 != ret && port < firstCandidate + 64; ++port )
+                {
+                    retry.SetPort( port );
+                    ret = bind( socket_, retry, retry.GetAddressLength() );
+                }
+
+                if ( 0 == ret )
+                {
+                    address_ = retry;
+                    aa3ds_log( "socket: bound to port %d instead", retry.GetPort() );
+                }
+                else
+                {
+                    aa3ds_log(
+                        "socket: no port in range could be bound, last errno %d",
+                        errno );
+                }
+            }
+        }
+#endif
 
         // read true address
         if ( 0 == ret )
@@ -2295,7 +2390,11 @@ const nSocket * nSocket::CheckNewConnection( void ) const
 #endif
 
     //    for ( SocketArray::iterator iter = sockets.begin(); iter != sockets.end(); ++iter )
+#ifdef __3DS__
+    int ret = 0;
+#else
     int ret = ioctl (socket_, FIONREAD, &available);
+#endif
     if ( ret == -1)
     {
         switch ( ANET_Error() )
@@ -2945,8 +3044,18 @@ nSocket * nBasicNetworkSystem::Init()
     // initialize networking at OS level
     sn_InitOSNetworking();
 
-    if ( 0 != controlSocket_.Open() )
-        Sys_Error("ANET_Init: Unable to open control socket\n");
+    {
+        int const opened = controlSocket_.Open();
+        if ( 0 != opened )
+        {
+#ifdef __3DS__
+            aa3ds_log(
+                "network: control socket failed to open, code %d, errno %d",
+                opened, errno );
+#endif
+            Sys_Error("ANET_Init: Unable to open control socket\n");
+        }
+    }
 
     return &controlSocket_;
 

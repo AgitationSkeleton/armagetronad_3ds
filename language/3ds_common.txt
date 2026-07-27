@@ -1,0 +1,86 @@
+# Nintendo 3DS control wording.
+#
+# Included once per shipped language from 3ds.txt, after the regular language
+# files, so these definitions replace the desktop ones. Every string here
+# describes a physical control, so the text is deliberately identical in all
+# languages rather than left saying "press ENTER or SPACE" on a console that
+# has neither.
+
+encoding                      latin1
+
+# Menu and binding instructions.
+input_item_help			To change, press A, then press the 3DS button you want to assign to this control. Moving the Circle Pad also works.
+language_firstchoice_help	Press A to select this language.
+detail_zone_style_custom_help	Custom submenu. Press A to access the custom menu.
+misc_global_key_text		Global Button Configuration
+misc_global_key_help		Button settings independent of the current player.
+misc_initial_menu_help		Restarts the first setup menu where you can select your cycle colour.
+keyboard_help			Button settings
+doublebind_time_help		Time in seconds during which no two different button events can trigger the same action
+
+# Player setup.
+player_input_help		Set up the 3DS controls for this player.
+player_camera_input_help	Set up the 3DS camera controls for this player.
+player_camera_center_int_help	On: every time you make a turn, the internal camera will face in the direction you turned to. Recommended on 3DS.\nOff: you alone control the direction you look in; it is independent of the direction you are driving.
+
+# Tutorials.
+tutorial_menu_navigation_instructions Use the turn controls to reach the green winzone, get used to how the basic physics work. Take your time, nothing is trying to kill you yet.\n\nPress B to abort this tutorial, most other buttons let you continue.
+tutorial_menu_survival_instructions Walls are deadly in \g, that includes your own trail. Your task in this tutorial is to avoid crashing in a small arena for long 30 seconds, after which a green winzone will appear. Drive into it to finish this tutorial.\n\nTraining wheels are activated, touching walls does not kill you right away.\n\nPress B to abort this tutorial as well as those that follow, most other buttons let you continue.
+
+# Display settings that survive on this console.
+screen_mode_advanced		Video Options
+screen_mode_advanced_help	Frame rate limit and other video settings that apply on Nintendo 3DS.
+
+# Top screen HUD.
+hud_menu_text			HUD Elements
+hud_menu_help			Choose which readouts appear on the top screen during a game. The rubber gauge is always shown.
+hud_score_text			Score:
+hud_score_help			Show your score next to the current best score.
+hud_speed_text			Speed and brakes:
+hud_speed_help			Show the speed readout and the brake gauge.
+hud_status_text			Players and ping:
+hud_status_help			Show how many foes and team mates are still alive, and your ping when playing online.
+
+# Text that named keys the console does not have.
+network_master_browserhelp	Press A or tap a server to connect to it. L and R change the sorting key. Refreshing, bookmarks, score bias and mates filtering need a keyboard and are not available on this console.
+player_name_help		The ... in "Winner: ... ". Press A to edit it with the software keyboard.
+player_teamname_help		Press A to edit this with the software keyboard.
+language_menu_item_first_help	\g will display most text messages in this language. Use L and R to choose.
+language_menu_item_second_help	If the first language is not available for one text item, it will be displayed in the second language (or in English as final fallback). Use L and R to choose.
+misc_menu_help			Diverse items that had no place elsewhere, such as global buttons.
+camera_glance_return_help	If you release all glance buttons and this is set, the order to glance forward directly into the direction you are driving in is issued. This can return the view back to normal faster than if you leave it up to the default camera code.
+input_cycle_brake_toggle_help	Turns your brake on and off permanently without you needing to hold a button down.
+instant_chat_string_help	Instant chat, available on any button you bind it to.
+input_cockpit_key_1_help	Cockpit buttons trigger actions such as showing and hiding parts of the HUD. This one cycles the touch screen map modes. No button is bound to it by default; bind one here if you want it.
+input_cockpit_key_2_help	Cockpit buttons trigger actions such as showing and hiding parts of the HUD. This one switches the score readout.
+input_cockpit_key_3_help	Cockpit buttons trigger actions such as showing and hiding parts of the HUD. This one switches the speed and brake readouts.
+input_cockpit_key_4_help	Cockpit buttons trigger actions such as showing and hiding parts of the HUD. This one switches the player status readout.
+input_cockpit_key_5_help	Cockpit buttons trigger actions such as showing and hiding parts of the HUD. Their actual effect depends on the cockpit file you use.
+
+# Line thickness.
+line_width_text			Trail line width:
+line_width_help			How many pixels wide wall and trail lines are drawn. A cycle trail seen end on is a single line, so raise this if trails are hard to follow at a distance.
+
+# Texture size limit.
+texture_size_text		Texture detail:
+texture_size_help		The largest texture the game keeps. Anything bigger, in a moviepack for instance, is rescaled as it loads. Lower this if a moviepack runs the console out of memory; the screen cannot show much beyond Normal.
+texture_size_128_text		Lowest
+texture_size_128_help		Textures no larger than 128 texels. Saves the most memory.
+texture_size_256_text		Low
+texture_size_256_help		Textures no larger than 256 texels.
+texture_size_512_text		Normal
+texture_size_512_help		Textures no larger than 512 texels. About as much detail as the screen can show.
+texture_size_1024_text		High
+texture_size_1024_help		Textures no larger than 1024 texels, the hardware maximum. A moviepack drawn for a desktop can run the console out of memory at this setting.
+
+# Stereoscopic 3D.
+stereo_depth_text		3D depth:
+stereo_depth_help		How much depth the 3D slider is allowed to give the top screen. The slider still controls the amount; this sets how far it can go. A 3D picture is drawn twice, once per eye, so it costs close to half the frame rate.
+stereo_depth_off_text		Off
+stereo_depth_off_help		Always draw a flat picture and ignore the slider. Fastest.
+stereo_depth_subtle_text	Subtle
+stereo_depth_subtle_help	A shallow picture. Easiest on the eyes and the least likely to break up if you are not holding the console still.
+stereo_depth_normal_text	Normal
+stereo_depth_normal_help	A moderate amount of depth.
+stereo_depth_strong_text	Strong
+stereo_depth_strong_help	As much depth as the slider will give. Impressive with the console held steady, tiring otherwise.

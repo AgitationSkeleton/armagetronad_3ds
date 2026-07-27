@@ -130,6 +130,15 @@ class ClipperCircle : public Clipper {
 public:
     void HandleEvent(bool state, int id);
     void Render(); //!< calls DrawMap()
+#ifdef __3DS__
+    void Render3DSBottom(cCockpit* cockpit);
+private:
+    //! Fill the arena outline before drawing it. The touch screen map has a
+    //! whole screen to itself, so it gets a backdrop the cockpit widget does
+    //! not bother with.
+    bool m_3dsFillArena = false;
+public:
+#endif
     virtual bool Process(tXmlParser::node cur); //!< Passes on to all Process() functions of the base classes and calls Base::DisplayError() on failure
 
     Map(); //!< default constructor

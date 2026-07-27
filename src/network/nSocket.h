@@ -55,7 +55,11 @@ typedef  char int8;
 //! union of supported internet addresses
 union nAddressBase
 {
+#ifdef __3DS__
+    struct sockaddr_storage storage; //!< generic address storage
+#else
     struct sockaddr     addr;       //!< generic address
+#endif
     struct sockaddr_in  addr_in;    //!< IPV4 address
     // struct sockaddr_in6 addr_in6;   //!< IPV6 address ( not supported yet )
 };
@@ -103,8 +107,8 @@ public:
 
     static int 	Compare ( const nAddress & a1, const nAddress & a2 );	//!< compares two addresses
 
-    operator struct sockaddr *      ()       { CompleteDNS(); return &addr_.addr; }   //!< conversion to sockaddr
-    operator struct sockaddr const *() const { CompleteDNS(); return &addr_.addr; }   //!< conversion to sockaddr
+    operator struct sockaddr *      ()       { CompleteDNS(); return SockAddr(); }   //!< conversion to sockaddr
+    operator struct sockaddr const *() const { CompleteDNS(); return SockAddr(); }   //!< conversion to sockaddr
 
     //! comparison operator
     bool operator == ( nAddress const & other ) const
@@ -127,6 +131,9 @@ private:
     void                FromSockAddrCore ( int l, sockaddr const * addr )  ; //!< copy address from hostent data without messing with backround DNS resolution
     nAddress const & 	ToStringCore          ( tString & string ) const   ; //!< turns address to complete string without messing with backround DNS resolution
     void CopyFromCore ( nAddress const & other ); //!< copies other address, no messing with backround DNS resolution
+
+    sockaddr * SockAddr() { return reinterpret_cast< sockaddr * >( &addr_ ); }
+    sockaddr const * SockAddr() const { return reinterpret_cast< sockaddr const * >( &addr_ ); }
 
     nAddressBase addr_;	    //!< the lowlevel network address
     unsigned int addrLen_;  //!< the length of the really stored address

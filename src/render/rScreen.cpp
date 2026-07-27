@@ -82,6 +82,104 @@ static int default_texturemode = GL_LINEAR_MIPMAP_LINEAR;
     #endif
 
 rDisplayListUsage sr_useDisplayLists=rDisplayList_Off;
+
+#ifdef __3DS__
+// How wide, in pixels, a line primitive is drawn. Cycle trails seen edge on
+// are a single line, so this is effectively how readable a trail is.
+int sr_3dsLineWidth = 3;
+
+// The largest texture kept, in texels on a side. Images bigger than this are
+// rescaled as they load. A moviepack drawn for a desktop can easily ask for
+// more texture memory than the console has, and the panel cannot show the
+// detail; lower this if a heavy moviepack runs the console out of memory.
+int sr_3dsTextureSize = 512;
+
+// How much depth the 3D slider is allowed to ask for, in tenths of a world
+// unit of eye separation at the top of its travel. Zero ignores the slider
+// entirely, which is worth having as a setting of its own: a stereo frame
+// draws the world twice, and someone who wants the frames back without
+// touching the slider should be able to say so.
+//
+// The slider is the real control. With it at the bottom the separation works
+// out at zero, the second pass is skipped, and the cost is nothing, so there
+// is no reason for this to start at off and make people find it first.
+int sr_3dsStereoDepth = 7;
+
+// How far away something has to be to sit at the depth of the screen. Cycles
+// and their trails are within a few units of the camera, the arena walls tens
+// of units away, so this decides how much of the arena stands out of the panel.
+REAL sr_3dsStereoFocalDistance = 20;
+
+static tConfItem<REAL> sr_3dsStereoFocalConf(
+    "STEREO_FOCAL_DISTANCE", sr_3dsStereoFocalDistance );
+
+// Half the eye separation to draw the given eye with, or zero if the frame
+// should be drawn flat. Reading the slider every frame is deliberate: it is a
+// physical control and the player expects moving it to do something at once.
+REAL sr_3dsStereoEyeOffset()
+{
+    if ( sr_3dsStereoDepth <= 0 || !gl_wrapper_stereo_available() )
+    {
+        gl_wrapper_set_stereo_output( 0 );
+        return 0;
+    }
+
+    REAL const slider = gl_wrapper_slider_state();
+    REAL const separation = slider * sr_3dsStereoDepth * REAL( .1 );
+
+    // Asking for the stereo display mode costs bandwidth whether or not there
+    // is any parallax to show, so give it back when the slider is down.
+    gl_wrapper_set_stereo_output( separation > 0 ? 1 : 0 );
+
+    return separation * REAL( .5 );
+}
+
+// Both settings are applied by comparison rather than only when they are
+// written, because a menu item assigns to the variable directly and never goes
+// through the configuration item's callback.
+void sr_Apply3DSVideoSettings()
+{
+    static int appliedLineWidth = -1;
+    static int appliedTextureSize = -1;
+
+    if ( appliedLineWidth != sr_3dsLineWidth )
+    {
+        appliedLineWidth = sr_3dsLineWidth;
+        gl_wrapper_set_line_width( static_cast<float>( sr_3dsLineWidth ) );
+    }
+
+    if ( appliedTextureSize != sr_3dsTextureSize )
+    {
+        bool const reload = appliedTextureSize >= 0;
+        appliedTextureSize = sr_3dsTextureSize;
+        gl_wrapper_set_max_texture_size( sr_3dsTextureSize );
+
+        // Textures already on the GPU were fitted to the old limit, so they
+        // have to be built again to pick up the new one.
+        if ( reload )
+            rITexture::UnloadAll();
+    }
+}
+
+void sr_Update3DSLineWidth()
+{
+    sr_Apply3DSVideoSettings();
+}
+
+static void sr_3dsVideoSettingChanged()
+{
+    sr_Apply3DSVideoSettings();
+}
+
+static tConfItem<int> sr_3dsLineWidthConf(
+    "WALL_LINE_WIDTH", sr_3dsLineWidth, &sr_3dsVideoSettingChanged );
+
+static tConfItem<int> sr_3dsTextureSizeConf(
+    "TEXTURE_MAX_SIZE", sr_3dsTextureSize, &sr_3dsVideoSettingChanged );
+
+static tConfItem<int> sr_3dsStereoDepthConf(
+    "STEREO_DEPTH", sr_3dsStereoDepth );
+#endif
 bool              sr_blacklistDisplayLists=false;
 
 static int width[ArmageTron_Custom+2]  = {0, 320, 320, 400, 512, 640, 800, 1024	, 1280, 1280, 1280, 1600, 1680, 2048,800,320};
@@ -1194,6 +1292,35 @@ static bool lowlevel_sr_InitDisplay(){
 
     if (!sr_screen)
     {
+#ifdef __3DS__
+        sr_screenWidthInPoints = 400;
+        sr_screenHeightInPoints = 240;
+        sr_screenWidth = 400;
+        sr_screenHeight = 240;
+        currentScreensetting.fullscreen = true;
+        currentScreensetting.res = rScreenSize(400, 240);
+        currentScreensetting.windowSize = rScreenSize(400, 240);
+
+        sr_screen = SDL_CreateRGBSurface(
+            SDL_SWSURFACE, 400, 240, 32,
+            0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+        if (!sr_screen)
+        {
+            lastError = "Couldn't create the 3DS SDL event surface.";
+            return false;
+        }
+
+        gl_wrapper_init();
+        sr_Update3DSLineWidth();
+        if (!gl_wrapper_is_initialized())
+        {
+            SDL_FreeSurface(sr_screen);
+            sr_screen = NULL;
+            lastError = "Couldn't initialize the 3DS Citro3D renderer.";
+            return false;
+        }
+        SDL_EnableUNICODE(1);
+#else
         int singleCD_R	= 5;
         int singleCD_G	= 5;
         int singleCD_B	= 5;
@@ -1327,6 +1454,7 @@ static bool lowlevel_sr_InitDisplay(){
         sr_CompleteGLAttributes();
 
         SDL_EnableUNICODE(1);
+#endif
     }
 
     #ifndef DEDICATED
@@ -1598,9 +1726,15 @@ void sr_ExitDisplay(){
         SDL_SetRelativeMouseMode(SDL_FALSE);
         SDL_DestroyWindow(sr_screen);
 #else
+#ifdef __3DS__
+        gl_wrapper_cleanup();
+        SDL_FreeSurface(sr_screen);
+        sr_screen=NULL;
+#else
         // z-man: according to man SDL_SetVideoSurface, screen should not bee freed.
         // SDL_FreeSurface(sr_screen);
         sr_screen=NULL;
+#endif
 #endif
         sr_UnlockSDL();
         //SDL_Quit();
@@ -1671,7 +1805,15 @@ void sr_LoadDefaultConfig(){
     // fonts look best in bilinear filtering, no mipmaps
     rTextureGroups::TextureMode[rTextureGroups::TEX_FONT]=GL_LINEAR;
     #endif
+#ifdef __3DS__
+    // The two texture floor draws the plane twice with additive blending,
+    // which saturates to solid white through the Citro3D compatibility layer.
+    // Upstream already drops to the single texture floor on hardware that
+    // cannot do it.
+    sr_floorDetail=rFLOOR_TEXTURE;
+#else
     sr_floorDetail=rFLOOR_TWOTEXTURE;
+#endif
     sr_floorMirror=rMIRROR_OFF;
     sr_infinityPlane=false;
     sr_lowerSky=false;

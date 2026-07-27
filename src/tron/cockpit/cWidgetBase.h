@@ -80,6 +80,10 @@ public:
     void SetCockpit(cCockpit *cockpit) {m_Cockpit = cockpit;} //!< Set the cockpit this widget belongs to
     void SetSticky (bool sticky) { m_Sticky = sticky; }
     bool Active() { return m_Render; } //!< Should we render this?
+    //! Set activity directly, without the flip a sticky Toggle() would do.
+    //! Used by the 3DS settings menu, which shows the state as a checkbox and
+    //! so needs to assign it rather than cycle it.
+    void SetActive(bool state) { m_Render = state; }
     //! Toggle activity
     void Toggle(bool state) {
         if(m_Sticky) {

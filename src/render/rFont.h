@@ -117,8 +117,17 @@ class rTextField{
     void FlushLine(int len,bool newline=true);
     void FlushLine(bool newline=true);
 public:
+#ifdef __3DS__
+// These heights are fractions of the screen, so on a 240 line panel the
+// desktop values work out at about six pixels. FreeType cannot render a
+// legible glyph that small and the result is a grey smear. Scaled so small
+// text lands near ten pixels, keeping the original width to height ratio.
+#define  rCWIDTH_NORMAL  (16/400.0)
+#define  rCHEIGHT_NORMAL (32/300.0)
+#else
 #define  rCWIDTH_NORMAL  (16/640.0)
 #define  rCHEIGHT_NORMAL (32/480.0)
+#endif
 
     rTextField(REAL Left,REAL Top,
                REAL Cheight, sr_fontClass Type);

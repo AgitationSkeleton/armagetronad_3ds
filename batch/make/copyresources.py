@@ -33,7 +33,7 @@ def IgnoreFiles(visitdir, contents):
     ignoreList = ["CVS", ".svn", ".bzr"]
 
     for a in contents:
-        if contents.endswith("~"):
+        if a.endswith("~"):
             ignoreList.append(a)
             
     return ignoreList

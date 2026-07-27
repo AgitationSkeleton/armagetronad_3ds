@@ -118,3 +118,8 @@ src/nTrueVersion.h
 .changetag
 fingerprint
 wget-log*
+
+# The Nintendo 3DS port keeps its own list in platform/3ds/.gitignore. It has
+# to: the rules above are written for the autotools build at this level, where
+# a bare "Makefile" is generated. Over there it is hand written and has to be
+# committed, so that directory starts from a clean slate.

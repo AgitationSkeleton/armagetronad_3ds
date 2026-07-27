@@ -1,0 +1,27 @@
+# Applies the Nintendo 3DS control wording to every language the 3DS build
+# ships. This file must be included last in languages.txt so its definitions
+# replace the desktop ones.
+
+language American English
+include 3ds_common.txt
+
+language British English
+include 3ds_common.txt
+
+language                      Spanish
+include 3ds_common.txt
+
+language                      Russian
+include 3ds_common.txt
+
+language                      Polish
+include 3ds_common.txt
+
+language                      Galician
+include 3ds_common.txt
+
+language                      Francais
+include 3ds_common.txt
+
+language                      Deutsch
+include 3ds_common.txt

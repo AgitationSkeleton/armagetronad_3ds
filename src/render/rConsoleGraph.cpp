@@ -59,6 +59,26 @@ static void sr_ConsolePerFrame(){
 
 static rPerFrameTask console_pf(&sr_ConsolePerFrame);
 
+#ifdef __3DS__
+void sr_Render3DSSecondEye()
+{
+    // Under the same condition the per frame task above uses. Drawing the
+    // console here unconditionally would put it in the second eye on frames
+    // where the first eye never got it, and text that reaches only one eye is
+    // not read as depth, it is read as a flicker.
+    if( !sr_con.autoDisplayAtSwap )
+        return;
+
+    // Drop the once a frame latch so it can be drawn again for the other eye,
+    // then put it back the way the per frame task above leaves it. Leaving it
+    // set would make the next frame's first eye think the console had already
+    // been drawn, and it would appear to the second eye alone.
+    sr_alreadyDisplayed = false;
+    sr_con.Render();
+    sr_alreadyDisplayed = false;
+}
+#endif
+
 
 void rConsole::DisplayAtNewline(){
     bool sw=autoDisplayAtSwap;
