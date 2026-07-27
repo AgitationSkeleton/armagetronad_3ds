@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v4
+        with:
+          # The version header is derived from the revision count, so a
+          # shallow clone would label the build with the wrong one.
+          fetch-depth: 0
 
       - name: Install host tools
         run: |
@@ -71,6 +75,9 @@ jobs:
 
       - name: Build dependencies
         run: sh platform/3ds/build-dependencies.sh
+
+      - name: Generate version header
+        run: sh platform/3ds/make-version-header.sh
 
       - name: Assemble RomFS
         run: sh platform/3ds/prepare-romfs.sh

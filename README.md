@@ -106,6 +106,7 @@ are vendored under `platform/3ds/vendor` and cross built from there.
 
 ```sh
 sh platform/3ds/build-dependencies.sh   # protobuf, libxml2, FTGL, and protoc
+sh platform/3ds/make-version-header.sh  # src/tTrueVersion.h, from the git history
 sh platform/3ds/prepare-romfs.sh        # packs config, textures, sounds, music
 make -C platform/3ds -j"$(nproc)"       # -> armagetronad-3ds.3dsx
 sh platform/3ds/package-cia.sh          # -> armagetronad-3ds.cia
