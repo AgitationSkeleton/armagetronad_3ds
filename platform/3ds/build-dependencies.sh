@@ -24,6 +24,14 @@ JOBS=${JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || echo 2)}
 toolchain="$DEVKITPRO/cmake/3DS.cmake"
 [ -f "$toolchain" ] || { echo "3DS cmake toolchain not found at $toolchain" >&2; exit 1; }
 
+# platform/3ds/include holds the small compatibility headers this console does
+# not have. protobuf reaches for <endian.h> to work out byte order, and newlib
+# has no such header, so the shim there has to be on the include path for the
+# cross builds as much as for the game itself.
+compat_cflags="-D__3DS__ -I$here/include"
+compat_cxxflags="$compat_cflags -march=armv6k -mtune=mpcore -mfloat-abi=hard \
+-mtp=soft -mword-relocations -ffunction-sections -fdata-sections"
+
 echo "==> libxml2"
 if [ ! -f "$vendor/libxml2-build-3ds/libxml2.a" ]; then
     # The client only parses local XML: resource files, cockpits and the like.
@@ -53,6 +61,8 @@ if [ ! -f "$vendor/protobuf-build-3ds/libprotobuf.a" ]; then
     cmake -S "$vendor/protobuf" -B "$vendor/protobuf-build-3ds" \
         -DCMAKE_TOOLCHAIN_FILE="$toolchain" \
         -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_FLAGS="$compat_cflags" \
+        -DCMAKE_CXX_FLAGS="$compat_cxxflags" \
         -DBUILD_SHARED_LIBS=OFF \
         -Dprotobuf_BUILD_SHARED_LIBS=OFF \
         -Dprotobuf_BUILD_TESTS=OFF \
