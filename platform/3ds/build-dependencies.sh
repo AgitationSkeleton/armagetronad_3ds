@@ -27,10 +27,13 @@ toolchain="$DEVKITPRO/cmake/3DS.cmake"
 # platform/3ds/include holds the small compatibility headers this console does
 # not have. protobuf reaches for <endian.h> to work out byte order, and newlib
 # has no such header, so the shim there has to be on the include path for the
-# cross builds as much as for the game itself.
-compat_cflags="-D__3DS__ -I$here/include"
-compat_cxxflags="$compat_cflags -march=armv6k -mtune=mpcore -mfloat-abi=hard \
--mtp=soft -mword-relocations -ffunction-sections -fdata-sections"
+# cross build as much as for the game itself.
+#
+# Handed over as CFLAGS and CXXFLAGS rather than as -DCMAKE_C_FLAGS, because
+# the latter replaces what the toolchain file set rather than adding to it.
+# Losing -march=armv6k -mfloat-abi=hard that way sends gcc to the wrong
+# multilib, where it cannot even find 3dsx_crt0.o to link its own test program.
+compat_flags="-D__3DS__ -I$here/include"
 
 echo "==> libxml2"
 if [ ! -f "$vendor/libxml2-build-3ds/libxml2.a" ]; then
@@ -58,11 +61,10 @@ echo "==> protobuf runtime"
 if [ ! -f "$vendor/protobuf-build-3ds/libprotobuf.a" ]; then
     # Only the runtime. protoc itself is a host tool and is built separately
     # below; asking for it here would try to run ARM binaries on the builder.
+    CFLAGS="$compat_flags" CXXFLAGS="$compat_flags" \
     cmake -S "$vendor/protobuf" -B "$vendor/protobuf-build-3ds" \
         -DCMAKE_TOOLCHAIN_FILE="$toolchain" \
         -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_C_FLAGS="$compat_cflags" \
-        -DCMAKE_CXX_FLAGS="$compat_cxxflags" \
         -DBUILD_SHARED_LIBS=OFF \
         -Dprotobuf_BUILD_SHARED_LIBS=OFF \
         -Dprotobuf_BUILD_TESTS=OFF \
