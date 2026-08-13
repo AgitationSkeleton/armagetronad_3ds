@@ -44,21 +44,46 @@ mkdir -p "$build"
 # mono file at twice the rate and the menu plays noise. Check rather than
 # trust, because a wrong banner is not a build error, it is a sound the console
 # makes at whoever is holding it.
-read_le() {
-    od -An -tu"$2" -j"$1" -N"$2" -v "$banner_wav" | tr -d ' \n'
-}
-channels=$(read_le 22 2)
-rate=$(read_le 24 4)
-bits=$(read_le 34 2)
-data=$(read_le 40 4)
-if [ "$channels" -ne 2 ] || [ "$rate" -ne 16364 ] || [ "$bits" -ne 16 ]; then
-    echo "banner.wav must be 16 bit stereo at 16364 Hz, found ${bits} bit, ${channels} channel, ${rate} Hz" >&2
-    exit 1
-fi
-if [ "$((data / 4))" -gt 49092 ]; then
-    echo "banner.wav is longer than the three seconds the HOME menu allows" >&2
-    exit 1
-fi
+#
+# Walk the chunks rather than reading fixed offsets. A RIFF file may carry a
+# LIST or fact chunk between fmt and data, and an editor that adds one moves
+# the data chunk along with it: reading the length from a fixed offset then
+# lands inside whatever was inserted and passes on a number that means nothing.
+"${PYTHON:-python3}" - "$banner_wav" <<'EOF' || exit 1
+import struct
+import sys
+
+blob = open(sys.argv[1], 'rb').read()
+if blob[:4] != b'RIFF' or blob[8:12] != b'WAVE':
+    sys.exit('banner.wav is not a RIFF WAVE file')
+
+fmt = data = None
+pos = 12
+while pos + 8 <= len(blob):
+    name = blob[pos:pos + 4]
+    size, = struct.unpack_from('<I', blob, pos + 4)
+    if name == b'fmt ':
+        fmt = struct.unpack_from('<HHIIHH', blob, pos + 8)
+    elif name == b'data':
+        data = size
+    pos += 8 + size + (size & 1)
+
+if fmt is None or data is None:
+    sys.exit('banner.wav has no fmt or data chunk')
+
+_, channels, rate, _, _, bits = fmt
+if (channels, rate, bits) != (2, 16364, 16):
+    sys.exit('banner.wav must be 16 bit stereo at 16364 Hz, found '
+             '%d bit, %d channel, %d Hz' % (bits, channels, rate))
+
+frames = data // 4
+if frames > 49092:
+    sys.exit('banner.wav is %.2f seconds; the HOME menu allows three'
+             % (frames / 16364.0))
+
+print('banner audio: %d Hz, %d channels, %d bit, %d frames' %
+      (rate, channels, bits, frames))
+EOF
 
 "$BANNERTOOL" makebanner -i "$banner_png" -a "$banner_wav" -o "$banner"
 

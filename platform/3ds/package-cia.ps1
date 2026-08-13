@@ -52,17 +52,44 @@ finally {
 # read as noise rather than as nothing. Check the file rather than trust it:
 # getting this wrong is not a build error, it is a sound the console makes at
 # whoever is holding it.
+#
+# Walk the chunks rather than reading fixed offsets. A RIFF file may carry a
+# LIST or fact chunk between fmt and data, and an editor that adds one moves
+# the data chunk along with it: reading the length from a fixed offset then
+# lands inside whatever was inserted and passes on a number that means nothing.
 $bannerFormat = [System.IO.File]::ReadAllBytes($bannerWav)
-$bannerChannels = [System.BitConverter]::ToInt16($bannerFormat, 22)
-$bannerRate = [System.BitConverter]::ToInt32($bannerFormat, 24)
-$bannerBits = [System.BitConverter]::ToInt16($bannerFormat, 34)
-$bannerFrames = ([System.BitConverter]::ToInt32($bannerFormat, 40)) / 4
+if ([System.Text.Encoding]::ASCII.GetString($bannerFormat, 0, 4) -ne 'RIFF' -or
+    [System.Text.Encoding]::ASCII.GetString($bannerFormat, 8, 4) -ne 'WAVE') {
+    throw 'banner.wav is not a RIFF WAVE file.'
+}
+
+$bannerChannels = 0; $bannerRate = 0; $bannerBits = 0; $bannerData = -1
+$pos = 12
+while ($pos + 8 -le $bannerFormat.Length) {
+    $chunk = [System.Text.Encoding]::ASCII.GetString($bannerFormat, $pos, 4)
+    $size = [System.BitConverter]::ToInt32($bannerFormat, $pos + 4)
+    if ($chunk -eq 'fmt ') {
+        $bannerChannels = [System.BitConverter]::ToInt16($bannerFormat, $pos + 10)
+        $bannerRate = [System.BitConverter]::ToInt32($bannerFormat, $pos + 12)
+        $bannerBits = [System.BitConverter]::ToInt16($bannerFormat, $pos + 22)
+    }
+    elseif ($chunk -eq 'data') {
+        $bannerData = $size
+    }
+    $pos += 8 + $size + ($size -band 1)
+}
+
+if ($bannerData -lt 0 -or $bannerRate -eq 0) {
+    throw 'banner.wav has no fmt or data chunk.'
+}
 if ($bannerChannels -ne 2 -or $bannerRate -ne 16364 -or $bannerBits -ne 16) {
     throw "banner.wav must be 16 bit stereo at 16364 Hz, found $bannerBits bit, $bannerChannels channel, $bannerRate Hz."
 }
+$bannerFrames = [int]($bannerData / 4)
 if ($bannerFrames -gt 49092) {
     throw "banner.wav is $([math]::Round($bannerFrames / 16364.0, 2)) seconds; the HOME menu allows three."
 }
+Write-Host "banner audio: $bannerRate Hz, $bannerChannels channels, $bannerBits bit, $bannerFrames frames"
 
 & $Bannertool makebanner -i $bannerPng -a $bannerWav -o $banner
 if ($LASTEXITCODE -ne 0) {
