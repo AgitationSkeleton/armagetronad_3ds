@@ -72,6 +72,13 @@ int sound_quality=SOUND_MED;
 static tConfItem<int> sq("SOUND_QUALITY",sound_quality);
 #endif
 
+// How loud effects are, as a percentage. Armagetron has never had a control
+// for this: the mix is capped per source and then saturates, so with several
+// cycles nearby the sum runs past full scale and stays there, which is heard
+// as everything being loud and edged with distortion.
+int se_effectVolume=100;
+static tConfItem<int> sev("SOUND_VOLUME",se_effectVolume);
+
 static int sound_sources=10;
 static tConfItem<int> ss("SOUND_SOURCES",sound_sources);
 static REAL loudness_thresh=0;
@@ -459,7 +466,16 @@ bool eLegacyWavData::Mix(Sint16 *dest,Uint32 playlen,eAudioPos &pos,
     //	Rvol *= 4;
     //	Lvol *= 4;
 
-    const REAL thresh = .25;
+    REAL thresh = .25;
+
+    {
+        // Scale the cap rather than the mixed result, so quiet sounds stay
+        // proportionate instead of everything being squashed towards silence.
+        int volume = se_effectVolume;
+        if ( volume < 0 ) volume = 0;
+        if ( volume > 200 ) volume = 200;
+        thresh *= REAL( volume ) / REAL( 100 );
+    }
 
     if ( Rvol > thresh )
     {

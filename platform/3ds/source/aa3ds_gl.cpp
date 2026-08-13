@@ -110,6 +110,9 @@ std::size_t vertexBufferUsed = 0;
 std::size_t vertexBufferFlushed = 0;
 std::vector<Vertex> triangleScratch;
 bool commandBudgetReported = false;
+// How often a frame had to be submitted early to make room. Nothing is lost
+// when this happens, but it costs a GPU round trip, so it is worth knowing.
+unsigned commandBudgetSplits = 0;
 
 // Lines are expanded to quads in screen space, so the width has to be applied
 // after the modelview and projection transforms rather than in object space.
@@ -594,17 +597,31 @@ void flushTriangles()
     if (triangleScratch.empty() || !vertexBuffer)
         return;
 
-    // libctru panics outright when the command buffer fills, so stop drawing
-    // before that happens. A frame that loses its last few batches is far
-    // better than a crash, and the warning says the budget needs raising.
+    // libctru panics outright when the command buffer fills, so something has
+    // to give before that happens. Dropping the rest of the frame was the
+    // first answer, and it is the wrong one in a busy round: what gets drawn
+    // last is other players' walls, and a wall that is not drawn is a wall the
+    // player cannot see and will drive into. Submit what is queued and carry
+    // on with an empty list instead. The frame costs more; nothing goes
+    // missing.
     if (C3D_GetCmdBufUsage() > 0.90f)
     {
-        if (!commandBudgetReported)
+        flushVertexCache();
+        C3D_FrameSplit(0);
+        gspWaitForP3D();
+        ++commandBudgetSplits;
+
+        // If a fresh list is still over the mark, the frame is beyond saving
+        // and dropping beats a panic.
+        if (C3D_GetCmdBufUsage() > 0.90f)
         {
-            commandBudgetReported = true;
-            aa3ds_log("renderer: GPU command budget exhausted, dropping draws");
+            if (!commandBudgetReported)
+            {
+                commandBudgetReported = true;
+                aa3ds_log("renderer: GPU command budget exhausted, dropping draws");
+            }
+            return;
         }
-        return;
     }
 
     const std::size_t total = triangleScratch.size();
@@ -1356,8 +1373,9 @@ void gl_wrapper_swap_buffers()
         {
             aa3ds_log_memory("frame");
             aa3ds_log(
-                "renderer: command buffer %d%% used",
-                (int)(C3D_GetCmdBufUsage() * 100.0f));
+                "renderer: command buffer %d%% used, %u mid-frame submits",
+                (int)(C3D_GetCmdBufUsage() * 100.0f),
+                commandBudgetSplits);
             aa3ds_log(
                 "hid: held=0x%08lx apt=%d polls=%u",
                 (unsigned long)hidKeysHeld(),

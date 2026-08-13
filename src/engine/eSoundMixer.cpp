@@ -44,6 +44,10 @@ eSoundMixer by Dave Fancella
 #include "eCoord.h"
 
 #include "eSoundMixer.h"
+
+#ifdef __3DS__
+#include "aa3ds_runtime.h"
+#endif
 #include "sdl_mixer/eMusicTrackSDLMixer.h"
 #include "sdl_mixer/eChannelSDLMixer.h"
 
@@ -279,6 +283,21 @@ void eSoundMixer::Init() {
     // guesstimate the desired number of samples to calculate in advance
     int samples = std::max(128, static_cast< int >( (buffersize * frequency) / 60 ));
 
+#ifdef __3DS__
+    // That guess is a sixtieth of a second, which assumes the machine wakes up
+    // sixty times a second to refill it. This one manages half that, and the
+    // callback that tops the buffer up does the whole legacy sound mix while
+    // it is there. A buffer that runs dry between refills is what static is.
+    // Round up to a power of two with real slack in it.
+    {
+        int wanted = std::max( samples, frequency / 15 );
+        int rounded = 512;
+        while ( rounded < wanted )
+            rounded <<= 1;
+        samples = rounded;
+    }
+#endif
+
     int rc = Mix_OpenAudio( frequency, AUDIO_S16LSB,
                             2, samples );
 
@@ -294,6 +313,21 @@ void eSoundMixer::Init() {
         int c;
         Uint16 b;
         Mix_QuerySpec(&se_mixerFrequency,&b,&c);
+
+        // Everything that resamples divides by this. It starts at 1, and a
+        // query that quietly fails would leave it there, turning every sound
+        // into noise played thousands of times too fast.
+        if ( se_mixerFrequency < 4000 )
+        {
+            se_mixerFrequency = frequency;
+        }
+#ifdef __3DS__
+        // The postmix filler below assumes stereo sixteen bit, so record what
+        // the device actually gave us rather than what was asked for.
+        aa3ds_log(
+            "audio: asked %d Hz S16LSB stereo %d samples, got %d Hz format 0x%04x %d channels",
+            frequency, samples, se_mixerFrequency, (unsigned)b, c );
+#endif
         //std::cout << "SDL_Mixer initialized with " << c << " channels.\n";
     } else {
         //std::cout << "Couldn't initialize SDL_Mixer, disabling sound.  I'm very sorry about that, I'll try to do better next time.\n";

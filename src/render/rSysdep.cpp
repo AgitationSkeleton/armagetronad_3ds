@@ -1547,6 +1547,30 @@ void rSysDep::SwapGL(){
         sr_Apply3DSVideoSettings();
     }
 
+    if ( aa3ds_trace_enabled() )
+    {
+        // Frame pacing. Input is read once a frame, so this is also how
+        // coarsely a turn can be timed.
+        static double lastFrame = 0.0;
+        static int frames = 0;
+        static double worst = 0.0;
+        double const now = tSysTimeFloat();
+        if ( lastFrame > 0.0 )
+        {
+            double const delta = now - lastFrame;
+            if ( delta > worst ) worst = delta;
+            if ( ++frames >= 120 )
+            {
+                aa3ds_log(
+                    "timing: %d frames, worst gap %.1f ms",
+                    frames, worst * 1000.0 );
+                frames = 0;
+                worst = 0.0;
+            }
+        }
+        lastFrame = now;
+    }
+
     aa3ds_render_bottom_screen();
 
     {
