@@ -33,3 +33,8 @@ vendor/*-build-3ds/
 !vendor/ftgl-build-3ds/
 vendor/ftgl-build-3ds/*
 !vendor/ftgl-build-3ds/Makefile
+
+# Candidate banner tunes from tools/make-banner-audio.py. The banner that
+# ships is banner.wav and is committed; anything that script produces is
+# unproven until it has been heard on a console.
+/banner-candidate.wav

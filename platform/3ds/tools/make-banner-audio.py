@@ -1,16 +1,19 @@
-"""Builds the CIA banner audio from Armagetron's own title track.
+"""Builds a candidate CIA banner tune from Armagetron's own title track.
 
-The 3DS HOME menu wants a three second, sixteen bit stereo CWAV at 16364 Hz.
-bannertool will convert a WAV, but it converts whatever it is given: hand it a
-mono file at twice the rate and the menu reads the result as noise. Both known
-good homebrew banners to compare against ship exactly 49092 stereo frames at
-16364 Hz, so that is what this writes.
+WARNING: what this produces has been tried on hardware and came out wrong on
+the HOME menu, despite measuring correct on every count that can be measured
+here: sixteen bit stereo, 16364 Hz, 49092 frames, the same shape as banners
+that do work. Whatever the console objects to is not something these checks
+catch, so treat the output as a starting point to be tested, not as a banner.
 
-The result is committed as platform/3ds/banner.wav, so building a CIA does not
-need this script; it is here so the banner can be made again from a different
-excerpt or a different track. Needs ffmpeg on the path and numpy.
+The banner actually shipped, platform/3ds/banner.wav, is the one from
+JavaTron3DS, which is known to play correctly. This script will not overwrite
+it. It writes beside it under a different name, and installing the result is a
+deliberate copy you make yourself once you have heard it on a console.
 
-    python platform/3ds/tools/make-banner-audio.py
+Needs ffmpeg on the path and numpy.
+
+    python platform/3ds/tools/make-banner-audio.py [output.wav]
 """
 
 import os
@@ -26,8 +29,19 @@ FRAMES = 49092          # exactly three seconds, the menu's limit
 HERE = os.path.dirname(os.path.abspath(__file__))
 PROJECT = os.path.normpath(os.path.join(HERE, '..', '..', '..'))
 SOURCE = os.path.join(PROJECT, 'music', 'titletrack.ogg')
-OUTPUT = os.path.normpath(os.path.join(HERE, '..', 'banner.wav'))
 SCRATCH = os.path.join(HERE, 'title-resampled.wav')
+
+SHIPPED = os.path.normpath(os.path.join(HERE, '..', 'banner.wav'))
+OUTPUT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else \
+    os.path.normpath(os.path.join(HERE, '..', 'banner-candidate.wav'))
+
+# The banner that ships works. This one has not been shown to, so it does not
+# get to replace it by default, and it does not get to replace it by accident
+# through an argument either.
+if os.path.normcase(OUTPUT) == os.path.normcase(SHIPPED):
+    sys.exit('refusing to overwrite the shipped banner.\n'
+             'Write somewhere else, listen to it on a console, and copy it '
+             'over yourself if it is good.')
 
 subprocess.run(
     ['ffmpeg', '-v', 'error', '-y', '-i', SOURCE,
